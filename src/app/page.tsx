@@ -57,9 +57,12 @@ export default function Dashboard() {
       if (res.ok) {
         const data = await res.json();
         setBots(data);
-        if (!selectedBot && data.length > 0) {
-          setSelectedBot(data[0].name);
-        }
+        setSelectedBot(prev => {
+          if (!prev && data.length > 0) {
+            return data[0].name;
+          }
+          return prev;
+        });
       }
     } catch (err) {
       console.error("Failed to fetch bots", err);
