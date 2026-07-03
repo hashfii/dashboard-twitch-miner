@@ -34,7 +34,14 @@ export default function Dashboard() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteBotName, setDeleteBotName] = useState<string | null>(null);
   const [addBotError, setAddBotError] = useState<string | null>(null);
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
+  const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
   const [analyticsFilter, setAnalyticsFilter] = useState<string>("All");
+  
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsStreamers, setSettingsStreamers] = useState("");
+  const [settingsWebhook, setSettingsWebhook] = useState("");
+  const [settingsLoading, setSettingsLoading] = useState(false);
   
   const router = useRouter();
 
@@ -145,6 +152,52 @@ export default function Dashboard() {
       console.error("Failed to delete bot", err);
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleOpenSettings = async () => {
+    if (!selectedBot) return;
+    setIsSettingsOpen(true);
+    setSettingsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/bots/${selectedBot}/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        setSettingsStreamers((data.streamers || []).join(", "));
+        setSettingsWebhook(data.discord_webhook || "");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBot) return;
+    setSettingsLoading(true);
+    try {
+      const streamersArray = settingsStreamers.split(",").map(s => s.trim()).filter(s => s);
+      const res = await fetch(`${API_BASE}/bots/${selectedBot}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ streamers: streamersArray, discord_webhook: settingsWebhook }),
+      });
+      if (res.ok) {
+        setIsSettingsOpen(false);
+        // auto-restart bot if it's running
+        const bot = bots.find(b => b.name === selectedBot);
+        if (bot?.status === "Running") {
+          await fetch(`${API_BASE}/bots/${selectedBot}/stop`, { method: "POST" });
+          await fetch(`${API_BASE}/bots/${selectedBot}/start`, { method: "POST" });
+          fetchBots();
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSettingsLoading(false);
     }
   };
 
@@ -282,6 +335,51 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
+      {/* Settings Dialog */}
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="bg-neutral-800 border-neutral-600 text-white shadow-2xl sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Bot Settings</DialogTitle>
+            <DialogDescription className="text-neutral-400">
+              Configure parameters for "{selectedBot}". Changes require a bot restart to take effect.
+            </DialogDescription>
+          </DialogHeader>
+          {settingsLoading ? (
+            <div className="py-4 text-center text-neutral-400">Loading...</div>
+          ) : (
+            <form onSubmit={handleSaveSettings}>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="streamers">Streamers (comma separated)</Label>
+                  <Input
+                    id="streamers"
+                    value={settingsStreamers}
+                    onChange={(e) => setSettingsStreamers(e.target.value)}
+                    className="bg-neutral-800 border-neutral-700"
+                    placeholder="fextralife, shroud, esl_csgo"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="webhook">Discord Webhook URL (Optional)</Label>
+                  <Input
+                    id="webhook"
+                    value={settingsWebhook}
+                    onChange={(e) => setSettingsWebhook(e.target.value)}
+                    className="bg-neutral-800 border-neutral-700"
+                    placeholder="https://discord.com/api/webhooks/..."
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={settingsLoading}>
+                  {settingsLoading ? "Saving..." : "Save & Restart"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {selectedBot ? (() => {
@@ -300,10 +398,14 @@ export default function Dashboard() {
                     variant="ghost" 
                     size="icon" 
                     className="h-7 w-7 text-neutral-400 hover:text-white rounded-full bg-neutral-800" 
-                    onClick={() => fetchBots()}
+                    onClick={async () => {
+                      setIsRefreshingStatus(true);
+                      await fetchBots();
+                      setTimeout(() => setIsRefreshingStatus(false), 500); // minimum animation time
+                    }}
                     title="Refresh Bot Status"
                   >
-                    <RefreshCw className="w-3 h-3" />
+                    <RefreshCw className={`w-3 h-3 ${isRefreshingStatus ? 'animate-spin' : ''}`} />
                   </Button>
                 </div>
                 <div className="flex items-center gap-2">
@@ -324,7 +426,11 @@ export default function Dashboard() {
                       <Settings className="w-5 h-5" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 bg-neutral-900 border-neutral-800 text-white">
-                      <DropdownMenuItem className="cursor-pointer hover:bg-neutral-800 focus:bg-neutral-800 focus:text-white">
+                      <DropdownMenuItem 
+                        className="cursor-pointer hover:bg-neutral-800 focus:bg-neutral-800 focus:text-white"
+                        onClick={handleOpenSettings}
+                        disabled={actionLoading === selectedBot}
+                      >
                         Bot Settings
                       </DropdownMenuItem>
                       <DropdownMenuItem 
@@ -363,10 +469,14 @@ export default function Dashboard() {
                               variant="ghost" 
                               size="icon" 
                               className="h-6 w-6 text-neutral-400 hover:text-white" 
-                              onClick={() => fetchLogs(selectedBot)}
+                              onClick={async () => {
+                                setIsRefreshingLogs(true);
+                                await fetchLogs(selectedBot);
+                                setTimeout(() => setIsRefreshingLogs(false), 500); // minimum animation time
+                              }}
                               title="Refresh Logs"
                             >
-                              <RefreshCw className="w-3 h-3" />
+                              <RefreshCw className={`w-3 h-3 ${isRefreshingLogs ? 'animate-spin' : ''}`} />
                             </Button>
                             <Button 
                               variant="ghost" 
