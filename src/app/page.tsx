@@ -214,7 +214,7 @@ export default function Dashboard() {
               <Plus className="w-4 h-4 mr-2" />
               Add Bot
             </Button>
-            <DialogContent className="bg-neutral-900 border-neutral-800 text-white sm:max-w-[425px]">
+            <DialogContent className="bg-neutral-800 border-neutral-600 text-white shadow-2xl sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Add New Bot</DialogTitle>
                 <DialogDescription className="text-neutral-400">
@@ -257,7 +257,7 @@ export default function Dashboard() {
 
       {/* Delete Bot Dialog */}
       <Dialog open={!!deleteBotName} onOpenChange={(open) => !open && setDeleteBotName(null)}>
-        <DialogContent className="bg-neutral-900 border-neutral-800 text-white sm:max-w-[425px]">
+        <DialogContent className="bg-neutral-800 border-neutral-600 text-white shadow-2xl sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
             <DialogDescription className="text-neutral-400">
