@@ -28,8 +28,8 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newBotName, setNewBotName] = useState("");
-  const [newBotCookies, setNewBotCookies] = useState("");
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   
   const router = useRouter();
 
@@ -93,20 +93,26 @@ export default function Dashboard() {
   };
 
   const handleStart = async (name: string) => {
+    setActionLoading(name);
     try {
       await fetch(`${API_BASE}/bots/${name}/start`, { method: "POST" });
       fetchBots();
     } catch (err) {
       console.error(err);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleStop = async (name: string) => {
+    setActionLoading(name);
     try {
       await fetch(`${API_BASE}/bots/${name}/stop`, { method: "POST" });
       fetchBots();
     } catch (err) {
       console.error(err);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -116,12 +122,11 @@ export default function Dashboard() {
       const res = await fetch(`${API_BASE}/bots/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newBotName, cookies: newBotCookies }),
+        body: JSON.stringify({ name: newBotName }),
       });
       if (res.ok) {
         setIsAddOpen(false);
         setNewBotName("");
-        setNewBotCookies("");
         fetchBots();
       } else {
         alert("Failed to add bot");
@@ -179,7 +184,7 @@ export default function Dashboard() {
               <DialogHeader>
                 <DialogTitle>Add New Bot</DialogTitle>
                 <DialogDescription className="text-neutral-400">
-                  Enter the bot username and paste the Twitch cookies (JSON format).
+                  Enter the bot username. Ensure you have copied your .pkl cookie file to the cookies directory on the server.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleAddBot}>
@@ -192,17 +197,6 @@ export default function Dashboard() {
                       onChange={(e) => setNewBotName(e.target.value)}
                       className="bg-neutral-800 border-neutral-700"
                       required
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="cookies">Cookies (JSON array)</Label>
-                    <Textarea
-                      id="cookies"
-                      value={newBotCookies}
-                      onChange={(e) => setNewBotCookies(e.target.value)}
-                      className="bg-neutral-800 border-neutral-700 h-32 font-mono text-xs"
-                      required
-                      placeholder={'[{"domain": ".twitch.tv", "name": "auth-token", ...}]'}
                     />
                   </div>
                 </div>
@@ -239,14 +233,14 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-center gap-2">
                   {bot?.status === 'Running' ? (
-                    <Button variant="destructive" size="sm" onClick={() => handleStop(selectedBot)}>
+                    <Button variant="destructive" size="sm" onClick={() => handleStop(selectedBot)} disabled={actionLoading === selectedBot}>
                       <Square className="w-4 h-4 mr-2 fill-current" />
-                      Stop
+                      {actionLoading === selectedBot ? "Stopping..." : "Stop"}
                     </Button>
                   ) : (
-                    <Button className="bg-green-600 hover:bg-green-700 text-white" size="sm" onClick={() => handleStart(selectedBot)}>
+                    <Button className="bg-green-600 hover:bg-green-700 text-white" size="sm" onClick={() => handleStart(selectedBot)} disabled={actionLoading === selectedBot}>
                       <Play className="w-4 h-4 mr-2 fill-current" />
-                      Start
+                      {actionLoading === selectedBot ? "Starting..." : "Start"}
                     </Button>
                   )}
                 </div>
@@ -256,11 +250,11 @@ export default function Dashboard() {
               <div className="flex-1 overflow-auto p-6">
                 <Tabs defaultValue="logs" className="w-full h-full flex flex-col">
                   <TabsList className="bg-neutral-900 border border-neutral-800 w-fit">
-                    <TabsTrigger value="logs" className="data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
+                    <TabsTrigger value="logs" className="text-neutral-400 data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
                       <Terminal className="w-4 h-4 mr-2" />
                       Console Logs
                     </TabsTrigger>
-                    <TabsTrigger value="analytics" className="data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
+                    <TabsTrigger value="analytics" className="text-neutral-400 data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
                       <Activity className="w-4 h-4 mr-2" />
                       Analytics
                     </TabsTrigger>
