@@ -250,11 +250,11 @@ export default function Dashboard() {
               <div className="flex-1 overflow-auto p-6">
                 <Tabs defaultValue="logs" className="w-full h-full flex flex-col">
                   <TabsList className="bg-neutral-900 border border-neutral-800 w-fit">
-                    <TabsTrigger value="logs" className="text-neutral-400 data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
+                    <TabsTrigger value="logs" className="text-neutral-300 hover:text-white data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
                       <Terminal className="w-4 h-4 mr-2" />
                       Console Logs
                     </TabsTrigger>
-                    <TabsTrigger value="analytics" className="text-neutral-400 data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
+                    <TabsTrigger value="analytics" className="text-neutral-300 hover:text-white data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
                       <Activity className="w-4 h-4 mr-2" />
                       Analytics
                     </TabsTrigger>

@@ -44,16 +44,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-neutral-950 p-4">
-      <Card className="w-full max-w-md bg-neutral-900 border-neutral-800 text-neutral-100">
+    <div className="flex items-center justify-center min-h-screen bg-neutral-950 p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-900 to-neutral-950">
+      <Card className="w-full max-w-md bg-neutral-900/50 border-neutral-800 text-neutral-100 backdrop-blur-sm shadow-2xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight">Twitch Miner Dashboard</CardTitle>
           <CardDescription className="text-neutral-400">
             Enter your admin credentials to access the dashboard.
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleLogin}>
-          <CardContent className="space-y-4">
+        <form onSubmit={handleLogin} className="flex flex-col gap-2">
+          <CardContent className="space-y-5">
             {error && (
               <div className="bg-red-900/50 border border-red-500/50 text-red-200 p-3 rounded-md flex items-center gap-2 text-sm">
                 <AlertCircle className="w-4 h-4" />
@@ -84,9 +84,9 @@ export default function LoginPage() {
               />
             </div>
           </CardContent>
-          <CardFooter className="pt-4 pb-6">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign in"}
+          <CardFooter className="pt-6 pb-6">
+            <Button type="submit" className="w-full h-11 text-base transition-all active:scale-[0.98]" disabled={loading}>
+              {loading ? "Signing in..." : "Sign in to Dashboard"}
             </Button>
           </CardFooter>
         </form>
