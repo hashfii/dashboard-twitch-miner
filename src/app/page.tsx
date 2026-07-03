@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Play, Square, Activity, Terminal, Plus, LogOut, RefreshCw } from "lucide-react";
+import { Play, Square, Activity, Terminal, Plus, LogOut, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const API_BASE = "/api";
@@ -113,6 +113,16 @@ export default function Dashboard() {
       console.error(err);
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleClearLogs = async (name: string) => {
+    try {
+      await fetch(`${API_BASE}/bots/${name}/clear-logs`, { method: "POST" });
+      setLogs([]); // Immediately clear on frontend
+      fetchLogs(name);
+    } catch (err) {
+      console.error("Failed to clear logs", err);
     }
   };
 
@@ -265,7 +275,26 @@ export default function Dashboard() {
                       <CardHeader className="py-3 px-4 border-b border-neutral-800 shrink-0">
                         <CardTitle className="text-sm font-medium flex items-center justify-between text-neutral-200">
                           Live Terminal Output
-                          <RefreshCw className="w-3 h-3 text-neutral-500 animate-spin-slow" />
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-neutral-400 hover:text-white" 
+                              onClick={() => fetchLogs(selectedBot)}
+                              title="Refresh Logs"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-red-400 hover:text-red-300 hover:bg-red-950/30" 
+                              onClick={() => handleClearLogs(selectedBot)}
+                              title="Clear Logs"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-0 flex-1 overflow-hidden relative">
