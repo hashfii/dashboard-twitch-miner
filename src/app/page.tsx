@@ -9,8 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Play, Square, Activity, Terminal, Plus, LogOut, RefreshCw, Trash2 } from "lucide-react";
+import { Play, Square, Activity, Terminal, Plus, LogOut, RefreshCw, Trash2, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const API_BASE = "/api";
@@ -32,6 +34,7 @@ export default function Dashboard() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteBotName, setDeleteBotName] = useState<string | null>(null);
   const [addBotError, setAddBotError] = useState<string | null>(null);
+  const [analyticsFilter, setAnalyticsFilter] = useState<string>("All");
   
   const router = useRouter();
 
@@ -304,17 +307,6 @@ export default function Dashboard() {
                   </Button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="text-red-500 hover:text-red-400 hover:bg-red-950/30 mr-2" 
-                    onClick={() => setDeleteBotName(selectedBot)}
-                    disabled={actionLoading === selectedBot}
-                    title="Delete Bot"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                  
                   {bot?.status === 'Running' ? (
                     <Button variant="destructive" size="sm" onClick={() => handleStop(selectedBot)} disabled={actionLoading === selectedBot}>
                       <Square className="w-4 h-4 mr-2 fill-current" />
@@ -326,6 +318,24 @@ export default function Dashboard() {
                       {actionLoading === selectedBot ? "Starting..." : "Start"}
                     </Button>
                   )}
+                  
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="flex h-9 w-9 items-center justify-center rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 ml-2 transition-colors">
+                      <Settings className="w-5 h-5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 bg-neutral-900 border-neutral-800 text-white">
+                      <DropdownMenuItem className="cursor-pointer hover:bg-neutral-800 focus:bg-neutral-800 focus:text-white">
+                        Bot Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className="cursor-pointer text-red-500 hover:bg-neutral-800 hover:text-red-400 focus:bg-neutral-800 focus:text-red-400"
+                        onClick={() => setDeleteBotName(selectedBot)}
+                        disabled={actionLoading === selectedBot}
+                      >
+                        Delete Bot
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </header>
 
@@ -387,37 +397,122 @@ export default function Dashboard() {
                   </TabsContent>
                   
                   <TabsContent value="analytics" className="flex-1 mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                      {/* Metric Cards */}
-                      <Card className="bg-neutral-900 border-neutral-800">
+                    <div className="flex flex-col gap-4 h-full">
+                      {/* Global Total Points Card */}
+                      <Card className="bg-neutral-900 border-neutral-800 shrink-0">
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-sm text-neutral-400">Total Points</CardTitle>
+                          <CardTitle className="text-sm text-neutral-400">Global Total Points</CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold text-white">
-                            {analytics ? 'TBD' : '—'}
+                          <div className="text-3xl font-bold text-white">
+                            {analytics ? Object.values(analytics).reduce((sum: number, streamerData: any) => {
+                              const series = streamerData.series;
+                              if (series && series.length > 0) return sum + series[series.length - 1].y;
+                              return sum;
+                            }, 0).toLocaleString() : '—'}
                           </div>
                         </CardContent>
                       </Card>
-                      {/* Add more metrics based on the JSON structure of analytics... For now placeholders */}
+
+                      {/* Points Per Streamer Grid */}
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 shrink-0">
+                        {analytics && Object.entries(analytics).map(([streamer, data]: [string, any]) => {
+                          const series = data.series;
+                          const total = series && series.length > 0 ? series[series.length - 1].y : 0;
+                          return (
+                            <Card key={streamer} className="bg-neutral-900 border-neutral-800">
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-xs text-neutral-400 break-all">{streamer}</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="text-xl font-semibold text-white">
+                                  {total.toLocaleString()}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Points History Chart */}
+                      <Card className="bg-neutral-900 border-neutral-800 flex-1 flex flex-col min-h-[400px]">
+                        <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3">
+                          <CardTitle className="text-lg">Points History</CardTitle>
+                          <Select value={analyticsFilter} onValueChange={(val) => setAnalyticsFilter(val || "All")}>
+                            <SelectTrigger className="w-[180px] bg-neutral-800 border-neutral-700 text-white">
+                              <SelectValue placeholder="Filter by Streamer" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-neutral-800 border-neutral-700 text-white">
+                              <SelectItem value="All">All Streamers</SelectItem>
+                              {analytics && Object.keys(analytics).map(streamer => (
+                                <SelectItem key={streamer} value={streamer}>{streamer}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </CardHeader>
+                        <CardContent className="flex-1 min-h-0 relative p-4">
+                          {analytics && Object.keys(analytics).length > 0 ? (() => {
+                            let chartData: any[] = [];
+                            if (analyticsFilter === "All") {
+                              const allEvents: { time: number, streamer: string, y: number }[] = [];
+                              Object.entries(analytics).forEach(([streamer, data]: [string, any]) => {
+                                if (data.series) {
+                                  data.series.forEach((pt: any) => {
+                                    allEvents.push({ time: pt.x, streamer, y: pt.y });
+                                  });
+                                }
+                              });
+                              allEvents.sort((a, b) => a.time - b.time);
+                              const latestPoints: Record<string, number> = {};
+                              allEvents.forEach(ev => {
+                                latestPoints[ev.streamer] = ev.y;
+                                const total = Object.values(latestPoints).reduce((sum, val) => sum + val, 0);
+                                chartData.push({ x: ev.time, y: total });
+                              });
+                            } else {
+                              chartData = analytics[analyticsFilter]?.series || [];
+                            }
+
+                            return (
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart margin={{ top: 10, right: 30, left: 10, bottom: 5 }} data={chartData}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                                  <XAxis 
+                                    dataKey="x" 
+                                    type="number"
+                                    scale="time"
+                                    domain={['dataMin', 'dataMax']} 
+                                    tickFormatter={(unixTime) => new Date(unixTime).toLocaleTimeString()}
+                                    stroke="#d4d4d4" 
+                                    allowDuplicatedCategory={false}
+                                  />
+                                  <YAxis stroke="#d4d4d4" tickFormatter={(value) => value.toLocaleString()} width={70} />
+                                  <Tooltip 
+                                    labelFormatter={(label) => new Date(label as number).toLocaleString()}
+                                    formatter={(value: any) => [Number(value).toLocaleString(), "Points"]}
+                                    contentStyle={{ backgroundColor: '#262626', borderColor: '#404040', color: '#fff' }}
+                                    itemStyle={{ color: '#fff' }}
+                                  />
+                                  <Line 
+                                    type="stepAfter" 
+                                    dataKey="y" 
+                                    stroke="#10b981" 
+                                    dot={false}
+                                    strokeWidth={2}
+                                    name={analyticsFilter === "All" ? "Global Points" : analyticsFilter}
+                                    isAnimationActive={false}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            );
+                          })() : (
+                            <div className="w-full h-full flex items-center justify-center text-neutral-500 italic">
+                              No analytics data available yet.
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
                     </div>
-                    
-                    <Card className="bg-neutral-900 border-neutral-800 col-span-full h-96">
-                      <CardHeader>
-                        <CardTitle>Points History</CardTitle>
-                      </CardHeader>
-                      <CardContent className="h-[300px]">
-                        {analytics ? (
-                          <div className="w-full h-full flex items-center justify-center text-neutral-500">
-                            Analytics chart will be rendered here once data format is known.
-                          </div>
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-neutral-500 italic">
-                            No analytics data available yet.
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
                   </TabsContent>
                 </Tabs>
               </div>
