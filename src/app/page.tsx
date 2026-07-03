@@ -167,12 +167,14 @@ export default function Dashboard() {
           </div>
 
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="w-full mt-6 border-neutral-700 bg-transparent text-neutral-300 hover:bg-neutral-800 hover:text-white">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Bot
-              </Button>
-            </DialogTrigger>
+            <Button 
+              variant="outline" 
+              className="w-full mt-6 border-neutral-700 bg-transparent text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              onClick={() => setIsAddOpen(true)}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Bot
+            </Button>
             <DialogContent className="bg-neutral-900 border-neutral-800 text-white sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Add New Bot</DialogTitle>
