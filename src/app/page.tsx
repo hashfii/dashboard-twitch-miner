@@ -101,7 +101,10 @@ export default function Dashboard() {
     setActionLoading(name);
     try {
       await fetch(`${API_BASE}/bots/${name}/start`, { method: "POST" });
-      fetchBots();
+      await fetchBots();
+      if (selectedBot === name) {
+        fetchLogs(name);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -113,7 +116,10 @@ export default function Dashboard() {
     setActionLoading(name);
     try {
       await fetch(`${API_BASE}/bots/${name}/stop`, { method: "POST" });
-      fetchBots();
+      await fetchBots();
+      if (selectedBot === name) {
+        fetchLogs(name);
+      }
     } catch (err) {
       console.error(err);
     } finally {
