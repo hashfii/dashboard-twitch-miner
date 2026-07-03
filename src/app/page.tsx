@@ -30,6 +30,8 @@ export default function Dashboard() {
   const [newBotName, setNewBotName] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteBotName, setDeleteBotName] = useState<string | null>(null);
+  const [addBotError, setAddBotError] = useState<string | null>(null);
   
   const router = useRouter();
 
@@ -120,15 +122,15 @@ export default function Dashboard() {
   };
 
   const handleDelete = async (name: string) => {
-    if (!window.confirm(`Are you sure you want to delete the bot "${name}"? This action cannot be undone.`)) {
-      return;
-    }
     setActionLoading(name);
     try {
       await fetch(`${API_BASE}/bots/${name}`, { method: "DELETE" });
-      setSelectedBot(null);
-      setLogs([]);
-      setAnalytics(null);
+      setDeleteBotName(null);
+      if (selectedBot === name) {
+        setSelectedBot(null);
+        setLogs([]);
+        setAnalytics(null);
+      }
       fetchBots();
     } catch (err) {
       console.error("Failed to delete bot", err);
@@ -149,6 +151,7 @@ export default function Dashboard() {
 
   const handleAddBot = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAddBotError(null);
     try {
       const res = await fetch(`${API_BASE}/bots/add`, {
         method: "POST",
@@ -160,11 +163,11 @@ export default function Dashboard() {
         setNewBotName("");
         fetchBots();
       } else {
-        alert("Failed to add bot");
+        setAddBotError("Failed to add bot. Check server logs.");
       }
     } catch (err) {
       console.error(err);
-      alert("Error adding bot");
+      setAddBotError("Error adding bot. Please try again.");
     }
   };
 
@@ -191,7 +194,7 @@ export default function Dashboard() {
             {bots.map((bot) => (
               <button
                 key={bot.name}
-                onClick={() => setSelectedBot(bot.name)}
+                onClick={() => { setSelectedBot(bot.name); fetchBots(); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors ${selectedBot === bot.name ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200'}`}
               >
                 <div className="flex items-center gap-2">
@@ -230,6 +233,11 @@ export default function Dashboard() {
                       required
                     />
                   </div>
+                  {addBotError && (
+                    <div className="text-red-500 text-sm">
+                      {addBotError}
+                    </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button type="submit">Create Bot</Button>
@@ -247,6 +255,24 @@ export default function Dashboard() {
         </div>
       </aside>
 
+      {/* Delete Bot Dialog */}
+      <Dialog open={!!deleteBotName} onOpenChange={(open) => !open && setDeleteBotName(null)}>
+        <DialogContent className="bg-neutral-900 border-neutral-800 text-white sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription className="text-neutral-400">
+              Are you sure you want to delete the bot "{deleteBotName}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteBotName(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteBotName && handleDelete(deleteBotName)}>
+              Delete Bot
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {selectedBot ? (() => {
@@ -261,13 +287,22 @@ export default function Dashboard() {
                     <div className={`w-2 h-2 rounded-full ${bot?.status === 'Running' ? 'bg-green-500' : 'bg-neutral-500'}`} />
                     {bot?.status}
                   </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-7 w-7 text-neutral-400 hover:text-white rounded-full bg-neutral-800" 
+                    onClick={() => fetchBots()}
+                    title="Refresh Bot Status"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </Button>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button 
                     variant="ghost" 
                     size="icon" 
                     className="text-red-500 hover:text-red-400 hover:bg-red-950/30 mr-2" 
-                    onClick={() => handleDelete(selectedBot)}
+                    onClick={() => setDeleteBotName(selectedBot)}
                     disabled={actionLoading === selectedBot}
                     title="Delete Bot"
                   >
