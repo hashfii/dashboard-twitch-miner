@@ -119,6 +119,24 @@ export default function Dashboard() {
     }
   };
 
+  const handleDelete = async (name: string) => {
+    if (!window.confirm(`Are you sure you want to delete the bot "${name}"? This action cannot be undone.`)) {
+      return;
+    }
+    setActionLoading(name);
+    try {
+      await fetch(`${API_BASE}/bots/${name}`, { method: "DELETE" });
+      setSelectedBot(null);
+      setLogs([]);
+      setAnalytics(null);
+      fetchBots();
+    } catch (err) {
+      console.error("Failed to delete bot", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleClearLogs = async (name: string) => {
     try {
       await fetch(`${API_BASE}/bots/${name}/clear-logs`, { method: "POST" });
@@ -245,6 +263,17 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-red-500 hover:text-red-400 hover:bg-red-950/30 mr-2" 
+                    onClick={() => handleDelete(selectedBot)}
+                    disabled={actionLoading === selectedBot}
+                    title="Delete Bot"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                  
                   {bot?.status === 'Running' ? (
                     <Button variant="destructive" size="sm" onClick={() => handleStop(selectedBot)} disabled={actionLoading === selectedBot}>
                       <Square className="w-4 h-4 mr-2 fill-current" />
