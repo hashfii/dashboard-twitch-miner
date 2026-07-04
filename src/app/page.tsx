@@ -38,6 +38,13 @@ export default function Dashboard() {
   const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
   const [analyticsFilter, setAnalyticsFilter] = useState<string>("All");
   
+  const [startDate, setStartDate] = useState<string>(
+    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  );
+  const [endDate, setEndDate] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  );
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsStreamers, setSettingsStreamers] = useState("");
   const [settingsWebhook, setSettingsWebhook] = useState("");
@@ -54,10 +61,10 @@ export default function Dashboard() {
   useEffect(() => {
     if (selectedBot) {
       fetchLogs(selectedBot);
-      fetchAnalytics(selectedBot);
+      fetchAnalytics(selectedBot, startDate, endDate);
       const interval = setInterval(() => {
         fetchLogs(selectedBot);
-        fetchAnalytics(selectedBot);
+        fetchAnalytics(selectedBot, startDate, endDate);
       }, 5000);
       return () => clearInterval(interval);
     }
@@ -95,9 +102,18 @@ export default function Dashboard() {
     }
   };
 
-  const fetchAnalytics = async (name: string) => {
+  const fetchAnalytics = async (name: string, start?: string, end?: string) => {
     try {
-      const res = await fetch(`${API_BASE}/bots/${name}/analytics`);
+      let url = `${API_BASE}/bots/${name}/analytics`;
+      const params = new URLSearchParams();
+      if (start) params.append('start_date', start);
+      if (end) params.append('end_date', end);
+      const queryString = params.toString();
+      if (queryString) {
+        url += `?${queryString}`;
+      }
+      
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setAnalytics(data);
@@ -549,19 +565,45 @@ export default function Dashboard() {
                       
                       {/* Points History Chart */}
                       <Card className="bg-neutral-900 border-neutral-800 flex-1 flex flex-col min-h-[400px]">
-                        <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3">
+                        <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3 gap-4 flex-wrap">
                           <CardTitle className="text-lg">Points History</CardTitle>
-                          <Select value={analyticsFilter} onValueChange={(val) => setAnalyticsFilter(val || "All")}>
-                            <SelectTrigger className="w-[180px] bg-neutral-800 border-neutral-700 text-white">
-                              <SelectValue placeholder="Filter by Streamer" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-neutral-800 border-neutral-700 text-white">
-                              <SelectItem value="All">All Streamers</SelectItem>
-                              {analytics && Object.keys(analytics).map(streamer => (
-                                <SelectItem key={streamer} value={streamer}>{streamer}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-neutral-400">From</span>
+                              <input 
+                                type="date" 
+                                value={startDate}
+                                onChange={(e) => {
+                                  setStartDate(e.target.value);
+                                  if (selectedBot) fetchAnalytics(selectedBot, e.target.value, endDate);
+                                }}
+                                className="bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1 text-sm h-9"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-neutral-400">To</span>
+                              <input 
+                                type="date" 
+                                value={endDate}
+                                onChange={(e) => {
+                                  setEndDate(e.target.value);
+                                  if (selectedBot) fetchAnalytics(selectedBot, startDate, e.target.value);
+                                }}
+                                className="bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1 text-sm h-9"
+                              />
+                            </div>
+                            <Select value={analyticsFilter} onValueChange={(val) => setAnalyticsFilter(val || "All")}>
+                              <SelectTrigger className="w-[180px] bg-neutral-800 border-neutral-700 text-white">
+                                <SelectValue placeholder="Filter by Streamer" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-neutral-800 border-neutral-700 text-white">
+                                <SelectItem value="All">All Streamers</SelectItem>
+                                {analytics && Object.keys(analytics).map(streamer => (
+                                  <SelectItem key={streamer} value={streamer}>{streamer}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </CardHeader>
                         <CardContent className="flex-1 min-h-0 relative p-4">
                           {analytics && Object.keys(analytics).length > 0 ? (() => {
@@ -602,7 +644,10 @@ export default function Dashboard() {
                                   <YAxis stroke="#d4d4d4" tickFormatter={(value) => value.toLocaleString()} width={70} />
                                   <Tooltip 
                                     labelFormatter={(label) => new Date(label as number).toLocaleString()}
-                                    formatter={(value: any) => [Number(value).toLocaleString(), "Points"]}
+                                    formatter={(value: any, name: any, props: any) => [
+                                      Number(value).toLocaleString(), 
+                                      props.payload.z ? `Points (${props.payload.z})` : "Points"
+                                    ]}
                                     contentStyle={{ backgroundColor: '#262626', borderColor: '#404040', color: '#fff' }}
                                     itemStyle={{ color: '#fff' }}
                                   />
