@@ -358,9 +358,12 @@ export default function Dashboard() {
                     className="bg-neutral-800 border-neutral-700"
                     placeholder="fextralife, shroud, esl_csgo"
                   />
+                  <p className="text-xs text-neutral-400">
+                    Example: https://www.twitch.tv/<strong>username_streamers</strong>
+                  </p>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="webhook">Webhook URL (Discord, Telegram, dll)</Label>
+                  <Label htmlFor="webhook">Webhook URL (Discord, Telegram, etc)</Label>
                   <Input
                     id="webhook"
                     value={settingsWebhook}
