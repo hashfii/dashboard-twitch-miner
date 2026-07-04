@@ -447,14 +447,14 @@ export default function Dashboard() {
                     <DropdownMenuContent align="end" className="w-48 bg-neutral-900 border-neutral-800 text-white">
                       <DropdownMenuItem 
                         className="cursor-pointer hover:bg-neutral-800 focus:bg-neutral-800 focus:text-white"
-                        onClick={handleOpenSettings}
+                        onSelect={() => handleOpenSettings()}
                         disabled={actionLoading === selectedBot}
                       >
                         Bot Settings
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="cursor-pointer text-red-500 hover:bg-neutral-800 hover:text-red-400 focus:bg-neutral-800 focus:text-red-400"
-                        onClick={() => setDeleteBotName(selectedBot)}
+                        onSelect={() => setDeleteBotName(selectedBot)}
                         disabled={actionLoading === selectedBot}
                       >
                         Delete Bot
@@ -566,7 +566,7 @@ export default function Dashboard() {
                       {/* Points History Chart */}
                       <Card className="bg-neutral-900 border-neutral-800 flex-1 flex flex-col min-h-[400px]">
                         <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3 gap-4 flex-wrap">
-                          <CardTitle className="text-lg">Points History</CardTitle>
+                          <CardTitle className="text-lg text-white">Points History</CardTitle>
                           <div className="flex items-center gap-3 flex-wrap">
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-neutral-400">From</span>
