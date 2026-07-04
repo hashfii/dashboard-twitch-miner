@@ -440,29 +440,21 @@ export default function Dashboard() {
                     </Button>
                   )}
                   
-                  <DropdownMenu>
+                  <DropdownMenu modal={false}>
                     <DropdownMenuTrigger className="flex h-9 w-9 items-center justify-center rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 ml-2 transition-colors">
                       <Settings className="w-5 h-5" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 bg-neutral-900 border-neutral-800 text-white">
                       <DropdownMenuItem 
                         className="cursor-pointer hover:bg-neutral-800 focus:bg-neutral-800 focus:text-white"
-                        onSelect={() => {
-                          setTimeout(() => {
-                            handleOpenSettings();
-                          }, 50);
-                        }}
+                        onSelect={() => handleOpenSettings()}
                         disabled={actionLoading === selectedBot}
                       >
                         Bot Settings
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="cursor-pointer text-red-500 hover:bg-neutral-800 hover:text-red-400 focus:bg-neutral-800 focus:text-red-400"
-                        onSelect={() => {
-                          setTimeout(() => {
-                            setDeleteBotName(selectedBot);
-                          }, 50);
-                        }}
+                        onSelect={() => setDeleteBotName(selectedBot)}
                         disabled={actionLoading === selectedBot}
                       >
                         Delete Bot
