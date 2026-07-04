@@ -360,13 +360,13 @@ export default function Dashboard() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="webhook">Discord Webhook URL (Optional)</Label>
+                  <Label htmlFor="webhook">Webhook URL (Discord, Telegram, dll)</Label>
                   <Input
                     id="webhook"
                     value={settingsWebhook}
                     onChange={(e) => setSettingsWebhook(e.target.value)}
                     className="bg-neutral-800 border-neutral-700"
-                    placeholder="https://discord.com/api/webhooks/..."
+                    placeholder="https://..."
                   />
                 </div>
               </div>
