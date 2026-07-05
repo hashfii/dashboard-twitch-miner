@@ -888,20 +888,23 @@ export default function Dashboard() {
                                   <XAxis 
                                     dataKey="x" 
                                     type="number"
-                                    scale="time"
                                     domain={['dataMin', 'dataMax']} 
                                     tickFormatter={(unixTime) => {
                                       const d = new Date(unixTime);
                                       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                                     }}
                                     stroke="#d4d4d4" 
-                                    allowDuplicatedCategory={false}
                                     tick={{ fontSize: 9 }}
                                     angle={-45}
                                     textAnchor="end"
-                                    interval="equidistantPreserveStart"
-                                    tickCount={8}
-                                    minTickGap={80}
+                                    ticks={(() => {
+                                      if (chartData.length <= 8) return undefined;
+                                      const min = chartData[0]?.x;
+                                      const max = chartData[chartData.length - 1]?.x;
+                                      if (!min || !max || min === max) return undefined;
+                                      const step = (max - min) / 7;
+                                      return Array.from({ length: 8 }, (_, i) => min + step * i);
+                                    })()}
                                     height={60}
                                   />
                                   <YAxis stroke="#d4d4d4" tickFormatter={(value) => value.toLocaleString()} width={70} />
