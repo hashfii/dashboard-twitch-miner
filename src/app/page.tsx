@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Play, Square, Activity, Terminal, Plus, LogOut, RefreshCw, Trash2, Settings, Calendar, Clock } from "lucide-react";
+import { Play, Square, Activity, Terminal, Plus, LogOut, RefreshCw, Trash2, Settings, Calendar, Clock, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const API_BASE = "/api";
@@ -114,6 +114,8 @@ export default function Dashboard() {
   const [settingsStreamers, setSettingsStreamers] = useState("");
   const [settingsWebhook, setSettingsWebhook] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(false);
+  const [streamerSort, setStreamerSort] = useState<"points" | "name">("points");
+  const [isStreamerGridOpen, setIsStreamerGridOpen] = useState(true);
   
   const router = useRouter();
 
@@ -608,25 +610,54 @@ export default function Dashboard() {
                         </CardContent>
                       </Card>
 
-                      {/* Points Per Streamer Grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 shrink-0">
-                        {analytics && Object.entries(analytics).map(([streamer, data]: [string, any]) => {
-                          const series = data.series;
-                          const total = series && series.length > 0 ? series[series.length - 1].y : 0;
-                          return (
-                            <Card key={streamer} className="bg-neutral-900 border-neutral-800">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-xs text-neutral-400 break-all">{streamer}</CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="text-xl font-semibold text-white">
-                                  {total.toLocaleString()}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          );
-                        })}
+                      {/* Sort label + HR + expand/collapse */}
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => setStreamerSort(streamerSort === "points" ? "name" : "points")}
+                            className="text-xs text-neutral-400 hover:text-neutral-200 transition-colors whitespace-nowrap cursor-pointer"
+                          >
+                            {streamerSort === "points" ? "Sorted by most points" : "Sorted by name"}
+                          </button>
+                        </div>
+                        <div className="flex-1 border-t border-neutral-700" />
+                        <button
+                          onClick={() => setIsStreamerGridOpen(!isStreamerGridOpen)}
+                          className="text-neutral-400 hover:text-white transition-all shrink-0"
+                        >
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isStreamerGridOpen ? '' : '-rotate-90'}`} />
+                        </button>
                       </div>
+
+                      {/* Points Per Streamer Grid */}
+                      {isStreamerGridOpen && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
+                          {analytics && (() => {
+                            const entries = Object.entries(analytics).map(([streamer, data]: [string, any]) => {
+                              const series = data.series;
+                              const total = series && series.length > 0 ? series[series.length - 1].y : 0;
+                              return { streamer, total };
+                            });
+                            if (streamerSort === "points") {
+                              entries.sort((a, b) => b.total - a.total);
+                            } else {
+                              entries.sort((a, b) => a.streamer.localeCompare(b.streamer));
+                            }
+                            return entries.map(({ streamer, total }) => (
+                              <Card key={streamer} className="bg-neutral-900 border-neutral-800">
+                                <CardHeader className="pb-2">
+                                  <CardTitle className="text-xs text-neutral-400 break-all">{streamer}</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="text-xl font-semibold text-white">
+                                    {total.toLocaleString()}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ));
+                          })()}
+                        </div>
+                      )}
                       
                       {/* Points History Chart */}
                       <Card className="bg-neutral-900 border-neutral-800 flex-1 flex flex-col min-h-[400px] mb-6 overflow-visible">
