@@ -115,7 +115,7 @@ export default function Dashboard() {
   const [settingsWebhook, setSettingsWebhook] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [streamerSort, setStreamerSort] = useState<"points" | "name">("points");
-  const [isStreamerGridOpen, setIsStreamerGridOpen] = useState(true);
+  const [isStreamerGridOpen, setIsStreamerGridOpen] = useState(false);
   
   const router = useRouter();
 
