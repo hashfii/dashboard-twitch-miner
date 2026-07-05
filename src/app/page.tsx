@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Play, Square, Activity, Terminal, Plus, LogOut, RefreshCw, Trash2, Settings } from "lucide-react";
+import { Play, Square, Activity, Terminal, Plus, LogOut, RefreshCw, Trash2, Settings, Calendar, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const API_BASE = "/api";
@@ -44,6 +44,71 @@ export default function Dashboard() {
   const [endDate, setEndDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+
+  // Time range picker state
+  const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
+  const [timePickerTab, setTimePickerTab] = useState<"relative" | "absolute">("relative");
+  const [timeRangeLabel, setTimeRangeLabel] = useState("Since 1 week ago");
+  const [relativeRange, setRelativeRange] = useState("1w");
+  const [customDuration, setCustomDuration] = useState("");
+  const [customUnit, setCustomUnit] = useState("minute");
+  const [absStartDate, setAbsStartDate] = useState("");
+  const [absStartTime, setAbsStartTime] = useState("");
+  const [absEndDate, setAbsEndDate] = useState("");
+  const [absEndTime, setAbsEndTime] = useState("");
+  const timePickerRef = useRef<HTMLDivElement>(null);
+
+  // Close time picker on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (timePickerRef.current && !timePickerRef.current.contains(e.target as Node)) {
+        setIsTimePickerOpen(false);
+      }
+    };
+    if (isTimePickerOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isTimePickerOpen]);
+
+  const applyRelativeRange = (range: string) => {
+    const now = new Date();
+    let ms = 0;
+    let label = "";
+    switch (range) {
+      case "1h": ms = 3600000; label = "Since 1 hour ago"; break;
+      case "6h": ms = 6 * 3600000; label = "Since 6 hours ago"; break;
+      case "1d": ms = 86400000; label = "Since 1 day ago"; break;
+      case "3d": ms = 3 * 86400000; label = "Since 3 days ago"; break;
+      case "1w": ms = 7 * 86400000; label = "Since 1 week ago"; break;
+      case "2w": ms = 14 * 86400000; label = "Since 2 weeks ago"; break;
+      case "1m": ms = 30 * 86400000; label = "Since 1 month ago"; break;
+      case "custom":
+        const dur = parseInt(customDuration) || 0;
+        if (dur <= 0) return;
+        const multiplier = customUnit === "minute" ? 60000 : customUnit === "hour" ? 3600000 : 86400000;
+        ms = dur * multiplier;
+        label = `Since ${dur} ${customUnit}${dur > 1 ? "s" : ""} ago`;
+        break;
+      default: return;
+    }
+    const start = new Date(now.getTime() - ms);
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(now.toISOString().split('T')[0]);
+    setTimeRangeLabel(label);
+    setIsTimePickerOpen(false);
+    if (selectedBot) fetchAnalytics(selectedBot, start.toISOString().split('T')[0], now.toISOString().split('T')[0]);
+  };
+
+  const applyAbsoluteRange = () => {
+    const s = absStartDate || startDate;
+    const e = absEndDate || endDate;
+    setStartDate(s);
+    setEndDate(e);
+    const sLabel = s.split('-').reverse().join('/');
+    const eLabel = e.split('-').reverse().join('/');
+    setTimeRangeLabel(`${sLabel} — ${eLabel}`);
+    setIsTimePickerOpen(false);
+    if (selectedBot) fetchAnalytics(selectedBot, s, e);
+  };
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsStreamers, setSettingsStreamers] = useState("");
@@ -568,30 +633,188 @@ export default function Dashboard() {
                         <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3 gap-4 flex-wrap">
                           <CardTitle className="text-lg text-white">Points History</CardTitle>
                           <div className="flex items-center gap-3 flex-wrap">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-neutral-400">From</span>
-                              <input 
-                                type="date" 
-                                value={startDate}
-                                onChange={(e) => {
-                                  setStartDate(e.target.value);
-                                  if (selectedBot) fetchAnalytics(selectedBot, e.target.value, endDate);
-                                }}
-                                className="bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1 text-sm h-9"
-                              />
+                            {/* AWS-style Time Range Picker */}
+                            <div className="relative" ref={timePickerRef}>
+                              <button
+                                onClick={() => setIsTimePickerOpen(!isTimePickerOpen)}
+                                className="flex items-center gap-2 bg-neutral-800 border border-neutral-700 text-white rounded-md px-3 py-1.5 text-sm hover:border-neutral-500 transition-colors h-9"
+                              >
+                                <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+                                <span className="text-xs">{timeRangeLabel}</span>
+                              </button>
+
+                              {isTimePickerOpen && (
+                                <div className="absolute right-0 top-full mt-2 z-[100] w-[340px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl">
+                                  {/* Tabs */}
+                                  <div className="flex items-center gap-1 p-3 pb-2">
+                                    <button
+                                      onClick={() => setTimePickerTab("relative")}
+                                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                        timePickerTab === "relative"
+                                          ? "bg-sky-600 text-white"
+                                          : "text-neutral-400 hover:text-white hover:bg-neutral-800"
+                                      }`}
+                                    >
+                                      Relative range
+                                    </button>
+                                    <button
+                                      onClick={() => setTimePickerTab("absolute")}
+                                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                        timePickerTab === "absolute"
+                                          ? "bg-sky-600 text-white"
+                                          : "text-neutral-400 hover:text-white hover:bg-neutral-800"
+                                      }`}
+                                    >
+                                      Absolute range
+                                    </button>
+                                  </div>
+
+                                  <div className="border-t border-neutral-800" />
+
+                                  {timePickerTab === "relative" ? (
+                                    <div className="p-3">
+                                      <p className="text-xs font-medium text-neutral-300 mb-2">Choose a range</p>
+                                      <div className="space-y-0.5">
+                                        {[
+                                          { value: "1h", label: "Since 1 hour ago" },
+                                          { value: "6h", label: "Since 6 hours ago" },
+                                          { value: "1d", label: "Since 1 day ago" },
+                                          { value: "3d", label: "Since 3 days ago" },
+                                          { value: "1w", label: "Since 1 week ago" },
+                                          { value: "2w", label: "Since 2 weeks ago" },
+                                          { value: "1m", label: "Since 1 month ago" },
+                                        ].map((opt) => (
+                                          <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-neutral-800 cursor-pointer">
+                                            <input
+                                              type="radio"
+                                              name="relRange"
+                                              checked={relativeRange === opt.value}
+                                              onChange={() => setRelativeRange(opt.value)}
+                                              className="accent-sky-500 w-3.5 h-3.5"
+                                            />
+                                            <span className="text-xs text-neutral-200">{opt.label}</span>
+                                          </label>
+                                        ))}
+                                        <label className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-neutral-800 cursor-pointer">
+                                          <input
+                                            type="radio"
+                                            name="relRange"
+                                            checked={relativeRange === "custom"}
+                                            onChange={() => setRelativeRange("custom")}
+                                            className="accent-sky-500 w-3.5 h-3.5 mt-0.5"
+                                          />
+                                          <div>
+                                            <span className="text-xs text-neutral-200 font-medium">Custom range</span>
+                                            <p className="text-[10px] text-neutral-500">Set a custom range in the past</p>
+                                          </div>
+                                        </label>
+                                      </div>
+
+                                      {relativeRange === "custom" && (
+                                        <div className="flex gap-2 mt-3">
+                                          <div className="flex-1">
+                                            <p className="text-[10px] text-neutral-400 mb-1">Duration</p>
+                                            <input
+                                              type="number"
+                                              min="1"
+                                              value={customDuration}
+                                              onChange={(e) => setCustomDuration(e.target.value)}
+                                              placeholder="Enter duration"
+                                              className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
+                                            />
+                                          </div>
+                                          <div className="flex-1">
+                                            <p className="text-[10px] text-neutral-400 mb-1">Unit of time</p>
+                                            <select
+                                              value={customUnit}
+                                              onChange={(e) => setCustomUnit(e.target.value)}
+                                              className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs appearance-none"
+                                            >
+                                              <option value="minute">minute</option>
+                                              <option value="hour">hour</option>
+                                              <option value="day">day</option>
+                                            </select>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Footer */}
+                                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-neutral-800">
+                                        <button onClick={() => { setIsTimePickerOpen(false); }} className="text-xs text-sky-400 hover:text-sky-300">
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={() => applyRelativeRange(relativeRange)}
+                                          className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-md font-medium transition-colors"
+                                        >
+                                          Apply
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="p-3">
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                          <p className="text-[10px] text-neutral-400 mb-1">Start date</p>
+                                          <input
+                                            type="date"
+                                            value={absStartDate || startDate}
+                                            onChange={(e) => setAbsStartDate(e.target.value)}
+                                            className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
+                                          />
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] text-neutral-400 mb-1">Start time</p>
+                                          <input
+                                            type="time"
+                                            step="1"
+                                            value={absStartTime}
+                                            onChange={(e) => setAbsStartTime(e.target.value)}
+                                            placeholder="hh:mm:ss"
+                                            className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
+                                          />
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] text-neutral-400 mb-1">End date</p>
+                                          <input
+                                            type="date"
+                                            value={absEndDate || endDate}
+                                            onChange={(e) => setAbsEndDate(e.target.value)}
+                                            className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
+                                          />
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] text-neutral-400 mb-1">End time</p>
+                                          <input
+                                            type="time"
+                                            step="1"
+                                            value={absEndTime}
+                                            onChange={(e) => setAbsEndTime(e.target.value)}
+                                            placeholder="hh:mm:ss"
+                                            className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
+                                          />
+                                        </div>
+                                      </div>
+                                      <p className="text-[10px] text-neutral-500 mt-2">Use YYYY/MM/DD for date. Time is 24h format.</p>
+
+                                      {/* Footer */}
+                                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-neutral-800">
+                                        <button onClick={() => { setIsTimePickerOpen(false); }} className="text-xs text-sky-400 hover:text-sky-300">
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={applyAbsoluteRange}
+                                          className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-md font-medium transition-colors"
+                                        >
+                                          Apply
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-neutral-400">To</span>
-                              <input 
-                                type="date" 
-                                value={endDate}
-                                onChange={(e) => {
-                                  setEndDate(e.target.value);
-                                  if (selectedBot) fetchAnalytics(selectedBot, startDate, e.target.value);
-                                }}
-                                className="bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1 text-sm h-9"
-                              />
-                            </div>
+
                             <Select value={analyticsFilter} onValueChange={(val) => setAnalyticsFilter(val || "All")}>
                               <SelectTrigger className="w-[180px] bg-neutral-800 border-neutral-700 text-white">
                                 <SelectValue placeholder="Filter by Streamer" />
@@ -637,14 +860,15 @@ export default function Dashboard() {
                                     type="number"
                                     scale="time"
                                     domain={['dataMin', 'dataMax']} 
-                                    tickFormatter={(unixTime) => new Date(unixTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    tickFormatter={(unixTime) => new Date(unixTime).toLocaleTimeString()}
                                     stroke="#d4d4d4" 
                                     allowDuplicatedCategory={false}
-                                    tick={{ fontSize: 11 }}
+                                    tick={{ fontSize: 9 }}
                                     angle={-45}
                                     textAnchor="end"
                                     interval="preserveStartEnd"
-                                    minTickGap={40}
+                                    minTickGap={50}
+                                    height={60}
                                   />
                                   <YAxis stroke="#d4d4d4" tickFormatter={(value) => value.toLocaleString()} width={70} />
                                   <Tooltip 
