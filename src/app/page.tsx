@@ -644,7 +644,7 @@ export default function Dashboard() {
                               </button>
 
                               {isTimePickerOpen && (
-                                <div className="absolute right-0 top-full mt-2 z-[100] w-[340px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl">
+                                <div className="absolute right-0 bottom-full mb-2 z-[100] w-[340px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl">
                                   {/* Tabs */}
                                   <div className="flex items-center gap-1 p-3 pb-2">
                                     <button
