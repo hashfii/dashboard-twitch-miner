@@ -630,7 +630,6 @@ export default function Dashboard() {
                       </div>
 
                       {/* Points Per Streamer Grid */}
-                      {isStreamerGridOpen && (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
                           {analytics && (() => {
                             const entries = Object.entries(analytics).map(([streamer, data]: [string, any]) => {
@@ -643,7 +642,8 @@ export default function Dashboard() {
                             } else {
                               entries.sort((a, b) => a.streamer.localeCompare(b.streamer));
                             }
-                            return entries.map(({ streamer, total }) => (
+                            const visible = isStreamerGridOpen ? entries : entries.slice(0, 5);
+                            return visible.map(({ streamer, total }) => (
                               <Card key={streamer} className="bg-neutral-900 border-neutral-800">
                                 <CardHeader className="pb-2">
                                   <CardTitle className="text-xs text-neutral-400 break-all">{streamer}</CardTitle>
@@ -657,7 +657,6 @@ export default function Dashboard() {
                             ));
                           })()}
                         </div>
-                      )}
                       
                       {/* Points History Chart */}
                       <Card className="bg-neutral-900 border-neutral-800 flex-1 flex flex-col min-h-[400px] mb-6 overflow-visible">
