@@ -860,14 +860,18 @@ export default function Dashboard() {
                                     type="number"
                                     scale="time"
                                     domain={['dataMin', 'dataMax']} 
-                                    tickFormatter={(unixTime) => new Date(unixTime).toLocaleTimeString()}
+                                    tickFormatter={(unixTime) => {
+                                      const d = new Date(unixTime);
+                                      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                    }}
                                     stroke="#d4d4d4" 
                                     allowDuplicatedCategory={false}
                                     tick={{ fontSize: 9 }}
                                     angle={-45}
                                     textAnchor="end"
-                                    interval="preserveStartEnd"
-                                    minTickGap={50}
+                                    interval="equidistantPreserveStart"
+                                    tickCount={8}
+                                    minTickGap={80}
                                     height={60}
                                   />
                                   <YAxis stroke="#d4d4d4" tickFormatter={(value) => value.toLocaleString()} width={70} />
