@@ -630,16 +630,21 @@ export default function Dashboard() {
 
                             return (
                               <ResponsiveContainer width="100%" height="100%">
-                                <LineChart margin={{ top: 10, right: 30, left: 10, bottom: 5 }} data={chartData}>
+                                <LineChart margin={{ top: 10, right: 30, left: 10, bottom: 40 }} data={chartData}>
                                   <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                                   <XAxis 
                                     dataKey="x" 
                                     type="number"
                                     scale="time"
                                     domain={['dataMin', 'dataMax']} 
-                                    tickFormatter={(unixTime) => new Date(unixTime).toLocaleTimeString()}
+                                    tickFormatter={(unixTime) => new Date(unixTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     stroke="#d4d4d4" 
                                     allowDuplicatedCategory={false}
+                                    tick={{ fontSize: 11 }}
+                                    angle={-45}
+                                    textAnchor="end"
+                                    interval="preserveStartEnd"
+                                    minTickGap={40}
                                   />
                                   <YAxis stroke="#d4d4d4" tickFormatter={(value) => value.toLocaleString()} width={70} />
                                   <Tooltip 
