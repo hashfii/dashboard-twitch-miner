@@ -629,8 +629,8 @@ export default function Dashboard() {
                       </div>
                       
                       {/* Points History Chart */}
-                      <Card className="bg-neutral-900 border-neutral-800 flex-1 flex flex-col min-h-[400px]">
-                        <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3 gap-4 flex-wrap">
+                      <Card className="bg-neutral-900 border-neutral-800 flex-1 flex flex-col min-h-[400px] mb-6 overflow-visible">
+                        <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3 gap-4 flex-wrap overflow-visible">
                           <CardTitle className="text-lg text-white">Points History</CardTitle>
                           <div className="flex items-center gap-3 flex-wrap">
                             {/* AWS-style Time Range Picker */}
@@ -644,7 +644,7 @@ export default function Dashboard() {
                               </button>
 
                               {isTimePickerOpen && (
-                                <div className="absolute right-0 bottom-full mb-2 z-[100] w-[340px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl">
+                                <div className="absolute right-0 top-full mt-2 z-[100] w-[340px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl">
                                   {/* Tabs */}
                                   <div className="flex items-center gap-1 p-3 pb-2">
                                     <button
