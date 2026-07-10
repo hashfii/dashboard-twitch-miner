@@ -242,6 +242,9 @@ export default function Dashboard() {
     if (!selectedBot) return;
     setIsSettingsOpen(true);
     setSettingsLoading(true);
+    // Clear old state before fetch in case of 404
+    setSettingsStreamers("");
+    setSettingsWebhook("");
     try {
       const res = await fetch(`${API_BASE}/bots/${selectedBot}/settings`);
       if (res.ok) {
@@ -514,14 +517,14 @@ export default function Dashboard() {
                     <DropdownMenuContent align="end" className="w-48 bg-neutral-900 border-neutral-800 text-white">
                       <DropdownMenuItem 
                         className="cursor-pointer hover:bg-neutral-800 focus:bg-neutral-800 focus:text-white"
-                        onClick={() => handleOpenSettings()}
+                        onSelect={() => setTimeout(() => handleOpenSettings(), 0)}
                         disabled={actionLoading === selectedBot}
                       >
                         Bot Settings
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="cursor-pointer text-red-500 hover:bg-neutral-800 hover:text-red-400 focus:bg-neutral-800 focus:text-red-400"
-                        onClick={() => setDeleteBotName(selectedBot)}
+                        onSelect={() => setTimeout(() => setDeleteBotName(selectedBot), 0)}
                         disabled={actionLoading === selectedBot}
                       >
                         Delete Bot
