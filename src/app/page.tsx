@@ -23,6 +23,19 @@ type Bot = {
   session: string;
 };
 
+const cleanLog = (log: string) => {
+  const match = log.match(/^([A-Za-z]{3})\s+(\d+)\s+(\d{2}:\d{2}:\d{2})\s+\S+\s+[^:]+:\s*(?:\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\s*)?(.*)/);
+  if (match) {
+    const month = match[1];
+    const date = match[2];
+    const time = match[3];
+    const rest = match[4];
+    const year = new Date().getFullYear();
+    return `${month} ${date} ${year} ${time} ${rest}`.trim();
+  }
+  return log;
+};
+
 export default function Dashboard() {
   const [bots, setBots] = useState<Bot[]>([]);
   const [selectedBot, setSelectedBot] = useState<string | null>(null);
@@ -584,7 +597,7 @@ export default function Dashboard() {
                           <div className="p-4 font-mono text-xs text-neutral-300 leading-relaxed">
                             {logs.length > 0 ? (
                               logs.map((log, i) => (
-                                <div key={i} className="whitespace-pre-wrap font-mono break-all mb-1">{log}</div>
+                                <div key={i} className="whitespace-pre-wrap font-mono break-all mb-1">{cleanLog(log)}</div>
                               ))
                             ) : (
                               <div className="text-neutral-500 italic">No logs available. Start the bot to generate logs.</div>
