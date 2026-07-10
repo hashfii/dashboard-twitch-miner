@@ -50,13 +50,40 @@ export default function Dashboard() {
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
   const [analyticsFilter, setAnalyticsFilter] = useState<string>("All");
-  
+  const logsViewportRef = useRef<HTMLDivElement>(null);
+  const [isLogsScrolledUp, setIsLogsScrolledUp] = useState(false);
+
+  const handleLogsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const isAtBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 50;
+    setIsLogsScrolledUp(!isAtBottom);
+  };
+
+  const scrollToLogsBottom = () => {
+    if (logsViewportRef.current) {
+      logsViewportRef.current.scrollTo({
+        top: logsViewportRef.current.scrollHeight,
+        behavior: "smooth"
+      });
+      setIsLogsScrolledUp(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLogsScrolledUp) {
+      scrollToLogsBottom();
+    }
+  }, [logs]);
+
   const [startDate, setStartDate] = useState<string>(
     new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
   const [endDate, setEndDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+  
+  const [filterStartTs, setFilterStartTs] = useState<number | null>(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [filterEndTs, setFilterEndTs] = useState<number | null>(Date.now());
 
   // Time range picker state
   const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
@@ -106,6 +133,8 @@ export default function Dashboard() {
     const start = new Date(now.getTime() - ms);
     setStartDate(start.toISOString().split('T')[0]);
     setEndDate(now.toISOString().split('T')[0]);
+    setFilterStartTs(start.getTime());
+    setFilterEndTs(now.getTime());
     setTimeRangeLabel(label);
     setIsTimePickerOpen(false);
     if (selectedBot) fetchAnalytics(selectedBot, start.toISOString().split('T')[0], now.toISOString().split('T')[0]);
@@ -116,6 +145,22 @@ export default function Dashboard() {
     const e = absEndDate || endDate;
     setStartDate(s);
     setEndDate(e);
+    
+    let startTs = new Date(s).getTime();
+    if (absStartTime) {
+      startTs = new Date(`${s}T${absStartTime}`).getTime();
+    }
+    
+    let endTs = new Date(e).getTime();
+    if (absEndTime) {
+      endTs = new Date(`${e}T${absEndTime}`).getTime();
+    } else {
+      endTs = new Date(`${e}T23:59:59`).getTime();
+    }
+    
+    setFilterStartTs(startTs);
+    setFilterEndTs(endTs);
+
     const sLabel = s.split('-').reverse().join('/');
     const eLabel = e.split('-').reverse().join('/');
     setTimeRangeLabel(`${sLabel} — ${eLabel}`);
@@ -593,7 +638,7 @@ export default function Dashboard() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-0 flex-1 overflow-hidden relative">
-                        <ScrollArea className="h-full w-full">
+                        <ScrollArea className="h-full w-full" viewportRef={logsViewportRef} onScroll={handleLogsScroll}>
                           <div className="p-4 font-mono text-xs text-neutral-300 leading-relaxed">
                             {logs.length > 0 ? (
                               logs.map((log, i) => (
@@ -604,6 +649,17 @@ export default function Dashboard() {
                             )}
                           </div>
                         </ScrollArea>
+                        {isLogsScrolledUp && (
+                          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 bg-neutral-900/95 border border-neutral-700 text-neutral-300 text-xs font-medium pl-4 pr-1 py-1 rounded-full shadow-2xl backdrop-blur-md">
+                            You're Viewing Older Messages
+                            <button
+                              onClick={scrollToLogsBottom}
+                              className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-full transition-colors font-semibold"
+                            >
+                              Jump To Present
+                            </button>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -895,6 +951,10 @@ export default function Dashboard() {
                               });
                             } else {
                               chartData = analytics[analyticsFilter]?.series || [];
+                            }
+
+                            if (filterStartTs !== null && filterEndTs !== null) {
+                              chartData = chartData.filter((pt: any) => pt.x >= filterStartTs && pt.x <= filterEndTs);
                             }
 
                             return (
