@@ -9,18 +9,49 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Play, Square, Activity, Terminal, Plus, LogOut, RefreshCw, Trash2, Settings, Calendar, Clock, ChevronDown } from "lucide-react";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Play, Square, Settings, RefreshCw, ChevronDown, Calendar, Plus, LogOut, Trash2, Activity, Terminal, Clock, Smile, Gift, Check, ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import EmojiPicker, { Theme, EmojiStyle, Emoji } from "emoji-picker-react";
 
 const API_BASE = "/api";
+
+const isUnifiedEmoji = (str: string) => /^[0-9a-f\-]+$/.test(str);
 
 type Bot = {
   name: string;
   status: "Running" | "Stopped";
   session: string;
+  icon?: string;
+};
+
+type Drop = {
+  id: string;
+  name: string;
+  image: string;
+  game: string;
+  isConnected: boolean;
+  accountLinkURL: string;
+  endAt: string;
+  count: number;
 };
 
 const cleanLog = (log: string) => {
@@ -49,12 +80,16 @@ export default function Dashboard() {
   const [addBotError, setAddBotError] = useState<string | null>(null);
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
-  const [analyticsFilter, setAnalyticsFilter] = useState<string>("All");
+  const [analyticsFilter, setAnalyticsFilter] = useState<string[]>(["All"]);
   const logsViewportRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState("logs");
   const [isLogsScrolledUp, setIsLogsScrolledUp] = useState(false);
 
   const handleLogsScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
+    // Ignore scroll events when the container is hidden
+    if (target.clientHeight === 0) return;
+    
     const isAtBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 50;
     setIsLogsScrolledUp(!isAtBottom);
   };
@@ -74,6 +109,15 @@ export default function Dashboard() {
       scrollToLogsBottom();
     }
   }, [logs]);
+
+  useEffect(() => {
+    if (activeTab === "logs" && !isLogsScrolledUp) {
+      // Small timeout to allow DOM to render before scrolling
+      setTimeout(() => {
+        scrollToLogsBottom();
+      }, 50);
+    }
+  }, [activeTab]);
 
   const [startDate, setStartDate] = useState<string>(
     new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -122,7 +166,10 @@ export default function Dashboard() {
       case "2w": ms = 14 * 86400000; label = "Since 2 weeks ago"; break;
       case "1m": ms = 30 * 86400000; label = "Since 1 month ago"; break;
       case "custom":
-        const dur = parseInt(customDuration) || 0;
+        let dur = parseInt(customDuration) || 0;
+        if (customUnit === "minute" && dur < 5) {
+          dur = 5;
+        }
         if (dur <= 0) return;
         const multiplier = customUnit === "minute" ? 60000 : customUnit === "hour" ? 3600000 : 86400000;
         ms = dur * multiplier;
@@ -169,11 +216,15 @@ export default function Dashboard() {
   };
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [originalStreamers, setOriginalStreamers] = useState("");
   const [settingsStreamers, setSettingsStreamers] = useState("");
   const [settingsWebhook, setSettingsWebhook] = useState("");
+  const [settingsIcon, setSettingsIcon] = useState("");
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [streamerSort, setStreamerSort] = useState<"points" | "name">("points");
   const [isStreamerGridOpen, setIsStreamerGridOpen] = useState(false);
+  const [drops, setDrops] = useState<Drop[]>([]);
+  const [dropsLoading, setDropsLoading] = useState(false);
   
   const router = useRouter();
 
@@ -187,6 +238,7 @@ export default function Dashboard() {
     if (selectedBot) {
       fetchLogs(selectedBot);
       fetchAnalytics(selectedBot, startDate, endDate);
+      fetchDrops(selectedBot);
       const interval = setInterval(() => {
         fetchLogs(selectedBot);
         fetchAnalytics(selectedBot, startDate, endDate);
@@ -248,6 +300,21 @@ export default function Dashboard() {
     }
   };
 
+  const fetchDrops = async (name: string) => {
+    setDropsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/bots/${name}/drops`);
+      if (res.ok) {
+        const data = await res.json();
+        setDrops(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch drops", err);
+    } finally {
+      setDropsLoading(false);
+    }
+  };
+
   const handleStart = async (name: string) => {
     setActionLoading(name);
     try {
@@ -302,13 +369,18 @@ export default function Dashboard() {
     setSettingsLoading(true);
     // Clear old state before fetch in case of 404
     setSettingsStreamers("");
+    setOriginalStreamers("");
     setSettingsWebhook("");
+    setSettingsIcon("");
     try {
       const res = await fetch(`${API_BASE}/bots/${selectedBot}/settings`);
       if (res.ok) {
         const data = await res.json();
-        setSettingsStreamers((data.streamers || []).join(", "));
+        const streamersStr = (data.streamers || []).join(", ");
+        setSettingsStreamers(streamersStr);
+        setOriginalStreamers(streamersStr);
         setSettingsWebhook(data.discord_webhook || "");
+        setSettingsIcon(data.icon || "");
       }
     } catch (err) {
       console.error(err);
@@ -326,16 +398,19 @@ export default function Dashboard() {
       const res = await fetch(`${API_BASE}/bots/${selectedBot}/settings`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ streamers: streamersArray, discord_webhook: settingsWebhook }),
+        body: JSON.stringify({ streamers: streamersArray, discord_webhook: settingsWebhook, icon: settingsIcon }),
       });
       if (res.ok) {
         setIsSettingsOpen(false);
-        // auto-restart bot if it's running
+        const streamersChanged = settingsStreamers.trim() !== originalStreamers.trim();
+        // auto-restart bot if it's running and streamers changed
         const bot = bots.find(b => b.name === selectedBot);
-        if (bot?.status === "Running") {
+        if (streamersChanged && bot?.status === "Running") {
           await fetch(`${API_BASE}/bots/${selectedBot}/stop`, { method: "POST" });
           await fetch(`${API_BASE}/bots/${selectedBot}/start`, { method: "POST" });
           fetchBots();
+        } else if (!streamersChanged) {
+          fetchBots(); // update UI for icon change immediately
         }
       }
     } catch (err) {
@@ -387,79 +462,118 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex min-h-screen bg-neutral-950 text-neutral-100">
+    <SidebarProvider defaultOpen={true}>
       {/* Sidebar */}
-      <aside className="w-64 border-r border-neutral-800 bg-neutral-900 flex flex-col">
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <h1 className="font-bold text-lg tracking-tight">Twitch Miner</h1>
-        </div>
+      <Sidebar collapsible="icon" className="border-r border-neutral-800 bg-neutral-900">
+        <SidebarHeader className="h-16 border-b border-neutral-800 flex justify-center shrink-0">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" tooltip="Twitch Miner" className="hover:bg-transparent data-[state=open]:bg-transparent group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:!justify-center">
+                <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                  <Activity className="w-5 h-5 text-indigo-500" />
+                </div>
+                <h1 className="font-bold text-lg tracking-tight ml-2 group-data-[collapsible=icon]:hidden">Twitch Miner</h1>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
         
-        <div className="p-4 flex-1 overflow-y-auto">
-          <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-4">Bots</div>
-          <div className="space-y-1">
-            {bots.map((bot) => (
-              <button
-                key={bot.name}
-                onClick={() => { setSelectedBot(bot.name); fetchBots(); }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors ${selectedBot === bot.name ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200'}`}
-              >
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${bot.status === 'Running' ? 'bg-green-500' : 'bg-neutral-500'}`} />
-                  {bot.name}
-                </div>
-              </button>
-            ))}
-          </div>
+        <SidebarContent>
+          <ScrollArea className="flex-1 w-full">
+            <SidebarGroup>
+              <div className="flex items-center justify-between w-full px-2 mt-2 mb-2 group-data-[collapsible=icon]:hidden">
+                <span className="text-xs font-medium text-sidebar-foreground/70">Bots</span>
+                <button onClick={() => setIsAddOpen(true)} className="w-6 h-6 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer flex items-center justify-center" title="Add Bot">
+                  <Plus className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+              </div>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-1">
+                {/* Collapsed Add Bot Button */}
+                <SidebarMenuItem className="hidden group-data-[collapsible=icon]:block mb-2 mt-2">
+                  <SidebarMenuButton 
+                    onClick={() => setIsAddOpen(true)} 
+                    tooltip="Add Bot" 
+                    className="text-neutral-400 hover:text-white justify-center"
+                  >
+                    <Plus className="w-4 h-4 shrink-0" strokeWidth={2.5} />
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {bots.map((bot) => (
+                  <SidebarMenuItem key={bot.name}>
+                    <SidebarMenuButton 
+                      isActive={selectedBot === bot.name} 
+                      onClick={() => { setSelectedBot(bot.name); fetchBots(); }}
+                      tooltip={bot.name}
+                    >
+                      <div className="w-4 h-4 flex items-center justify-center shrink-0">
+                        {bot.icon ? (
+                          <span className="text-sm leading-none flex items-center justify-center">
+                            {isUnifiedEmoji(bot.icon) ? (
+                              <Emoji unified={bot.icon} size={16} emojiStyle={EmojiStyle.APPLE} />
+                            ) : (
+                              bot.icon
+                            )}
+                          </span>
+                        ) : (
+                          <div className={`w-2 h-2 rounded-full ${bot.status === 'Running' ? 'bg-green-500' : 'bg-neutral-500'}`} />
+                        )}
+                      </div>
+                      <span className="group-data-[collapsible=icon]:hidden">{bot.name}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+                
+                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                  {/* Add Bot dialog is controlled via state */}
+                  <DialogContent className="bg-neutral-800 border-neutral-600 text-white shadow-2xl sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Add New Bot</DialogTitle>
+                      <DialogDescription className="text-neutral-400">
+                        Enter the bot username. Ensure you have copied your .pkl cookie file to the cookies directory on the server.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleAddBot}>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="name">Twitch Username</Label>
+                          <Input
+                            id="name"
+                            value={newBotName}
+                            onChange={(e) => setNewBotName(e.target.value)}
+                            className="bg-neutral-800 border-neutral-700"
+                            required
+                          />
+                        </div>
+                        {addBotError && (
+                          <div className="text-red-500 text-sm">
+                            {addBotError}
+                          </div>
+                        )}
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit">Create Bot</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          </ScrollArea>
+        </SidebarContent>
 
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <Button 
-              variant="outline" 
-              className="w-full mt-6 border-neutral-700 bg-transparent text-neutral-300 hover:bg-neutral-800 hover:text-white"
-              onClick={() => setIsAddOpen(true)}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Bot
-            </Button>
-            <DialogContent className="bg-neutral-800 border-neutral-600 text-white shadow-2xl sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Add New Bot</DialogTitle>
-                <DialogDescription className="text-neutral-400">
-                  Enter the bot username. Ensure you have copied your .pkl cookie file to the cookies directory on the server.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleAddBot}>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="name">Twitch Username</Label>
-                    <Input
-                      id="name"
-                      value={newBotName}
-                      onChange={(e) => setNewBotName(e.target.value)}
-                      className="bg-neutral-800 border-neutral-700"
-                      required
-                    />
-                  </div>
-                  {addBotError && (
-                    <div className="text-red-500 text-sm">
-                      {addBotError}
-                    </div>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Create Bot</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        <div className="p-4 border-t border-neutral-800">
-          <Button variant="ghost" className="w-full justify-start text-neutral-400 hover:text-white hover:bg-neutral-800" onClick={handleLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </aside>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={handleLogout} tooltip="Logout" className="text-neutral-400 hover:text-white">
+                <LogOut className="w-4 h-4 shrink-0" />
+                <span className="group-data-[collapsible=icon]:hidden">Logout</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
 
       {/* Delete Bot Dialog */}
       <Dialog open={!!deleteBotName} onOpenChange={(open) => !open && setDeleteBotName(null)}>
@@ -495,11 +609,11 @@ export default function Dashboard() {
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="streamers">Streamers (comma separated)</Label>
-                  <Input
+                  <Textarea
                     id="streamers"
                     value={settingsStreamers}
                     onChange={(e) => setSettingsStreamers(e.target.value)}
-                    className="bg-neutral-800 border-neutral-700"
+                    className="bg-neutral-800 border-neutral-700 field-sizing-content min-h-10 max-h-40 resize-none overflow-y-auto break-words"
                     placeholder="fextralife, shroud, esl_csgo"
                   />
                   <p className="text-xs text-neutral-400">
@@ -516,10 +630,44 @@ export default function Dashboard() {
                     placeholder="https://..."
                   />
                 </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="icon">Bot Icon / Emoji (Optional)</Label>
+                  <div className="flex gap-2">
+                    <div className="bg-neutral-800 border-neutral-700 border w-16 h-9 rounded-md flex items-center justify-center">
+                      {settingsIcon ? (
+                        isUnifiedEmoji(settingsIcon) ? (
+                          <Emoji unified={settingsIcon} size={22} emojiStyle={EmojiStyle.APPLE} />
+                        ) : (
+                          <span className="text-xl">{settingsIcon}</span>
+                        )
+                      ) : (
+                        <span className="text-xl opacity-50">🤖</span>
+                      )}
+                    </div>
+                    <Popover>
+                      <PopoverTrigger className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 bg-neutral-800 border-neutral-700 text-neutral-300">
+                        <Smile className="w-4 h-4 mr-2" />
+                        Choose Emoji
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 border-none bg-transparent" align="start">
+                        <EmojiPicker 
+                          theme={Theme.DARK} 
+                          emojiStyle={EmojiStyle.APPLE}
+                          onEmojiClick={(emojiData) => setSettingsIcon(emojiData.unified)} 
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    {settingsIcon && (
+                      <Button variant="ghost" type="button" onClick={() => setSettingsIcon("")} className="text-neutral-400">
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={settingsLoading}>
-                  {settingsLoading ? "Saving..." : "Save & Restart"}
+                  {settingsLoading ? "Saving..." : (settingsStreamers.trim() !== originalStreamers.trim() ? "Save & Restart" : "Save")}
                 </Button>
               </DialogFooter>
             </form>
@@ -536,6 +684,9 @@ export default function Dashboard() {
               {/* Header */}
               <header className="h-16 border-b border-neutral-800 bg-neutral-900/50 flex items-center justify-between px-6 shrink-0">
                 <div className="flex items-center gap-4">
+                  <div className="flex items-center pr-4 border-r border-neutral-800 h-8">
+                    <SidebarTrigger className="text-neutral-400 hover:text-white" />
+                  </div>
                   <h2 className="text-xl font-bold">{selectedBot}</h2>
                   <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-800 border border-neutral-700 text-xs font-medium">
                     <div className={`w-2 h-2 rounded-full ${bot?.status === 'Running' ? 'bg-green-500' : 'bg-neutral-500'}`} />
@@ -575,14 +726,14 @@ export default function Dashboard() {
                     <DropdownMenuContent align="end" className="w-48 bg-neutral-900 border-neutral-800 text-white">
                       <DropdownMenuItem 
                         className="cursor-pointer hover:bg-neutral-800 focus:bg-neutral-800 focus:text-white"
-                        onSelect={() => setTimeout(() => handleOpenSettings(), 0)}
+                        onClick={() => setTimeout(() => handleOpenSettings(), 0)}
                         disabled={actionLoading === selectedBot}
                       >
                         Bot Settings
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="cursor-pointer text-red-500 hover:bg-neutral-800 hover:text-red-400 focus:bg-neutral-800 focus:text-red-400"
-                        onSelect={() => setTimeout(() => setDeleteBotName(selectedBot), 0)}
+                        onClick={() => setTimeout(() => setDeleteBotName(selectedBot), 0)}
                         disabled={actionLoading === selectedBot}
                       >
                         Delete Bot
@@ -593,9 +744,9 @@ export default function Dashboard() {
               </header>
 
               {/* Content */}
-              <div className="flex-1 overflow-auto p-6">
-                <Tabs defaultValue="logs" className="w-full h-full flex flex-col">
-                  <TabsList className="bg-neutral-900 border border-neutral-800 w-fit">
+              <div className="flex-1 p-6 flex flex-col overflow-hidden min-h-0">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col min-h-0">
+                  <TabsList className="bg-neutral-900 border border-neutral-800 w-fit shrink-0">
                     <TabsTrigger value="logs" className="text-neutral-300 hover:text-white data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
                       <Terminal className="w-4 h-4 mr-2" />
                       Console Logs
@@ -604,10 +755,14 @@ export default function Dashboard() {
                       <Activity className="w-4 h-4 mr-2" />
                       Analytics
                     </TabsTrigger>
+                    <TabsTrigger value="drops" className="text-neutral-300 hover:text-white data-[state=active]:bg-neutral-800 data-[state=active]:text-white">
+                      <Gift className="w-4 h-4 mr-2" />
+                      Drops & Rewards
+                    </TabsTrigger>
                   </TabsList>
                   
-                  <TabsContent value="logs" className="flex-1 mt-4">
-                    <Card className="h-[calc(100vh-12rem)] bg-neutral-900 border-neutral-800 flex flex-col">
+                  <TabsContent value="logs" className="flex-1 mt-4 data-[state=inactive]:hidden flex flex-col min-h-0">
+                    <Card className="flex-1 bg-neutral-900 border-neutral-800 flex flex-col min-h-0">
                       <CardHeader className="py-3 px-4 border-b border-neutral-800 shrink-0">
                         <CardTitle className="text-sm font-medium flex items-center justify-between text-neutral-200">
                           Live Terminal Output
@@ -664,8 +819,9 @@ export default function Dashboard() {
                     </Card>
                   </TabsContent>
                   
-                  <TabsContent value="analytics" className="flex-1 mt-4">
-                    <div className="flex flex-col gap-4 h-full">
+                  <TabsContent value="analytics" className="flex-1 mt-4 data-[state=inactive]:hidden flex flex-col min-h-0">
+                    <ScrollArea className="flex-1">
+                      <div className="flex flex-col gap-4 pr-4 pb-4">
                       {/* Global Total Points Card */}
                       <Card className="bg-neutral-900 border-neutral-800 shrink-0">
                         <CardHeader className="pb-2">
@@ -731,7 +887,7 @@ export default function Dashboard() {
                         </div>
                       
                       {/* Points History Chart */}
-                      <Card className="bg-neutral-900 border-neutral-800 flex-1 flex flex-col min-h-[400px] mb-6 overflow-visible">
+                      <Card className="bg-neutral-900 border-neutral-800 flex flex-col mb-6 overflow-visible">
                         <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3 gap-4 flex-wrap overflow-visible">
                           <CardTitle className="text-lg text-white">Points History</CardTitle>
                           <div className="flex items-center gap-3 flex-wrap">
@@ -818,7 +974,7 @@ export default function Dashboard() {
                                             <p className="text-[10px] text-neutral-400 mb-1">Duration</p>
                                             <input
                                               type="number"
-                                              min="1"
+                                              min={customUnit === "minute" ? 5 : 1}
                                               value={customDuration}
                                               onChange={(e) => setCustomDuration(e.target.value)}
                                               placeholder="Enter duration"
@@ -917,23 +1073,65 @@ export default function Dashboard() {
                               )}
                             </div>
 
-                            <Select value={analyticsFilter} onValueChange={(val) => setAnalyticsFilter(val || "All")}>
-                              <SelectTrigger className="w-[180px] bg-neutral-800 border-neutral-700 text-white">
-                                <SelectValue placeholder="Filter by Streamer" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-neutral-800 border-neutral-700 text-white">
-                                <SelectItem value="All">All Streamers</SelectItem>
-                                {analytics && Object.keys(analytics).map(streamer => (
-                                  <SelectItem key={streamer} value={streamer}>{streamer}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger className="flex h-9 w-[180px] items-center justify-between rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-white">
+                                {analyticsFilter.includes("All") ? "All Streamers" : `${analyticsFilter.length} Selected`}
+                                <ChevronDown className="h-4 w-4 opacity-50" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-[180px] bg-neutral-800 border-neutral-700 text-white max-h-[300px] overflow-y-auto">
+                                <DropdownMenuCheckboxItem
+                                  checked={analyticsFilter.includes("All")}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setAnalyticsFilter(["All"]);
+                                    } else {
+                                      setAnalyticsFilter([]);
+                                    }
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  All Streamers
+                                </DropdownMenuCheckboxItem>
+                                {analytics && Object.keys(analytics).map(streamer => {
+                                  const isChecked = analyticsFilter.includes(streamer);
+                                  const isDisabled = !isChecked && !analyticsFilter.includes("All") && analyticsFilter.length >= 5;
+                                  return (
+                                    <DropdownMenuCheckboxItem
+                                      key={streamer}
+                                      checked={isChecked}
+                                      disabled={isDisabled}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          setAnalyticsFilter(prev => {
+                                            const next = prev.filter(s => s !== "All");
+                                            if (next.length >= 5) return prev;
+                                            return [...next, streamer];
+                                          });
+                                        } else {
+                                          setAnalyticsFilter(prev => {
+                                            const next = prev.filter(s => s !== "All" && s !== streamer);
+                                            if (next.length === 0) return ["All"];
+                                            return next;
+                                          });
+                                        }
+                                      }}
+                                      className="cursor-pointer"
+                                    >
+                                      {streamer}
+                                    </DropdownMenuCheckboxItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </CardHeader>
-                        <CardContent className="flex-1 min-h-0 relative p-4">
+                        <CardContent className="relative p-4">
                           {analytics && Object.keys(analytics).length > 0 ? (() => {
                             let chartData: any[] = [];
-                            if (analyticsFilter === "All") {
+                            let selectedStreamers: string[] = [];
+
+                            if (analyticsFilter.includes("All")) {
+                              selectedStreamers = ["global_points"];
                               const allEvents: { time: number, streamer: string, y: number }[] = [];
                               Object.entries(analytics).forEach(([streamer, data]: [string, any]) => {
                                 if (data.series) {
@@ -947,20 +1145,49 @@ export default function Dashboard() {
                               allEvents.forEach(ev => {
                                 latestPoints[ev.streamer] = ev.y;
                                 const total = Object.values(latestPoints).reduce((sum, val) => sum + val, 0);
-                                chartData.push({ x: ev.time, y: total });
+                                chartData.push({ x: ev.time, "global_points": total });
                               });
                             } else {
-                              chartData = analytics[analyticsFilter]?.series || [];
+                              selectedStreamers = analyticsFilter;
+                              if (selectedStreamers.length === 0) {
+                                return <div className="w-full h-full flex items-center justify-center text-neutral-500 italic">No streamers selected.</div>;
+                              }
+
+                              const allEvents: { time: number, streamer: string, y: number }[] = [];
+                              selectedStreamers.forEach(streamer => {
+                                if (analytics[streamer]?.series) {
+                                  analytics[streamer].series.forEach((pt: any) => {
+                                    allEvents.push({ time: pt.x, streamer, y: pt.y });
+                                  });
+                                }
+                              });
+                              
+                              allEvents.sort((a, b) => a.time - b.time);
+                              
+                              const latestPoints: Record<string, number> = {};
+                              allEvents.forEach(ev => {
+                                latestPoints[ev.streamer] = ev.y;
+                                chartData.push({ x: ev.time, ...latestPoints });
+                              });
                             }
 
                             if (filterStartTs !== null && filterEndTs !== null) {
                               chartData = chartData.filter((pt: any) => pt.x >= filterStartTs && pt.x <= filterEndTs);
                             }
+                            
+                            const chartConfig = selectedStreamers.reduce((acc, streamer, index) => {
+                              const hue = (index * 137.5) % 360;
+                              acc[streamer] = {
+                                label: streamer === "global_points" ? "Global Points" : streamer,
+                                color: streamer === "global_points" ? "#10b981" : `hsl(${hue}, 70%, 50%)`,
+                              };
+                              return acc;
+                            }, {} as ChartConfig);
 
                             return (
-                              <ResponsiveContainer width="100%" height="100%">
-                                <LineChart margin={{ top: 10, right: 30, left: 10, bottom: 40 }} data={chartData}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                              <ChartContainer config={chartConfig} className="w-full h-[350px]">
+                                <LineChart margin={{ top: 10, right: 30, left: 10, bottom: 0 }} data={chartData}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                                   <XAxis 
                                     dataKey="x" 
                                     type="number"
@@ -981,29 +1208,41 @@ export default function Dashboard() {
                                       const step = (max - min) / 7;
                                       return Array.from({ length: 8 }, (_, i) => min + step * i);
                                     })()}
-                                    height={60}
+                                    height={50}
+                                    tickLine={false}
+                                    axisLine={false}
                                   />
-                                  <YAxis stroke="#d4d4d4" tickFormatter={(value) => value.toLocaleString()} width={70} />
-                                  <Tooltip 
-                                    labelFormatter={(label) => new Date(label as number).toLocaleString()}
-                                    formatter={(value: any, name: any, props: any) => [
-                                      Number(value).toLocaleString(), 
-                                      props.payload.z ? `Points (${props.payload.z})` : "Points"
-                                    ]}
-                                    contentStyle={{ backgroundColor: '#262626', borderColor: '#404040', color: '#fff' }}
-                                    itemStyle={{ color: '#fff' }}
+                                  <YAxis 
+                                    stroke="#d4d4d4" 
+                                    tickFormatter={(value) => value.toLocaleString()} 
+                                    width={70} 
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickCount={10}
+                                    domain={['auto', 'auto']}
                                   />
-                                  <Line 
-                                    type="stepAfter" 
-                                    dataKey="y" 
-                                    stroke="#10b981" 
-                                    dot={false}
-                                    strokeWidth={2}
-                                    name={analyticsFilter === "All" ? "Global Points" : analyticsFilter}
-                                    isAnimationActive={false}
+                                  <ChartTooltip 
+                                    cursor={false} 
+                                    content={<ChartTooltipContent labelFormatter={(_, payload) => {
+                                      if (payload && payload.length > 0) {
+                                        return new Date(payload[0].payload.x).toLocaleString();
+                                      }
+                                      return "";
+                                    }} />} 
                                   />
+                                  {selectedStreamers.map((streamer) => (
+                                    <Line 
+                                      key={streamer}
+                                      type="stepAfter" 
+                                      dataKey={streamer} 
+                                      stroke={`var(--color-${streamer})`}
+                                      strokeWidth={2}
+                                      dot={false}
+                                      isAnimationActive={false}
+                                    />
+                                  ))}
                                 </LineChart>
-                              </ResponsiveContainer>
+                              </ChartContainer>
                             );
                           })() : (
                             <div className="w-full h-full flex items-center justify-center text-neutral-500 italic">
@@ -1012,6 +1251,109 @@ export default function Dashboard() {
                           )}
                         </CardContent>
                       </Card>
+                    </div>
+                    </ScrollArea>
+                  </TabsContent>
+                  
+                  <TabsContent value="drops" className="flex-1 mt-4 data-[state=inactive]:hidden flex flex-col min-h-0">
+                    <div className="flex-1 flex flex-col min-h-0">
+                      <div className="shrink-0 mb-4">
+                        <h2 className="text-xl font-semibold text-white">Drops & Rewards</h2>
+                        <p className="text-neutral-400 text-sm mt-1">
+                          Claimed drops are displayed below. If an account link is required, click the button to connect your game account.
+                        </p>
+                      </div>
+                      
+                      {dropsLoading ? (
+                        <div className="flex items-center justify-center p-12 text-neutral-500">
+                          <RefreshCw className="w-6 h-6 animate-spin mr-2" /> Loading drops...
+                        </div>
+                      ) : (() => {
+                        const now = new Date();
+                        const validDrops = drops.filter(drop => {
+                          const end = new Date(drop.endAt);
+                          const diffDays = (now.getTime() - end.getTime()) / (1000 * 60 * 60 * 24);
+                          return diffDays <= 180;
+                        });
+                        
+                        if (validDrops.length === 0) {
+                          return (
+                            <div className="flex items-center justify-center p-12 text-neutral-500 italic">
+                              No claimed drops found in the last 6 months.
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <div className="flex-1 min-h-0">
+                            <ScrollArea className="h-full w-full">
+                              <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3 pr-4 pb-4">
+                              {validDrops.map((drop, idx) => {
+                                const end = new Date(drop.endAt);
+                                const diffHours = Math.floor((now.getTime() - end.getTime()) / (1000 * 60 * 60));
+                                const diffDays = Math.floor(diffHours / 24);
+                                let timeStr = "";
+                                if (diffHours < 0) {
+                                  timeStr = "recently";
+                                } else if (diffHours < 24) {
+                                  timeStr = `${Math.max(1, diffHours)} hours ago`;
+                                } else if (diffDays === 1) {
+                                  timeStr = "yesterday";
+                                } else if (diffDays <= 30) {
+                                  timeStr = `${diffDays} days ago`;
+                                } else if (diffDays <= 60) {
+                                  timeStr = "last month";
+                                } else {
+                                  timeStr = `${Math.floor(diffDays / 30)} months ago`;
+                                }
+                                
+                                return (
+                                  <Card key={`${drop.id}-${idx}`} className="bg-[#18181b] border-neutral-800 flex flex-col overflow-hidden group">
+                                    <div className="aspect-square bg-[#1f1f23] relative p-3 flex items-center justify-center border-b border-neutral-800/50">
+                                      {drop.image ? (
+                                        <img src={drop.image} alt={drop.name} className="max-w-full max-h-full object-contain drop-shadow-xl" />
+                                      ) : (
+                                        <Gift className="w-12 h-12 text-neutral-700" />
+                                      )}
+                                    </div>
+                                    <div className="p-3 flex flex-col flex-1 gap-1">
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-[13px] font-medium text-neutral-400">{timeStr}</p>
+                                        <div className="bg-white/10 px-2 py-0.5 rounded text-white text-[12px] font-bold leading-none flex items-center justify-center">
+                                          {drop.count || 1}
+                                        </div>
+                                      </div>
+                                      <div className="mt-0.5">
+                                        <h3 className="font-bold text-neutral-200 text-[15px] leading-snug line-clamp-2" title={drop.name}>{drop.name}</h3>
+                                      </div>
+                                      <div className="flex-1">
+                                        <p className="text-[13px] text-neutral-400 min-h-[20px]">{drop.game || ""}</p>
+                                      </div>
+                                      
+                                      <div className="mt-2 flex justify-center">
+                                        {drop.isConnected ? (
+                                          <Button variant="secondary" size="icon" disabled className="w-8 h-8 rounded-md bg-white/5 text-white disabled:opacity-100">
+                                            <Check className="w-5 h-5" />
+                                          </Button>
+                                        ) : (
+                                          <Button 
+                                            className="bg-[#9146ff] hover:bg-[#772ce8] text-white h-8 text-[12px] font-semibold gap-1.5 px-3"
+                                            onClick={() => window.open(drop.accountLinkURL, "_blank")}
+                                          >
+                                            <ExternalLink className="w-4 h-4" />
+                                            Connect
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </Card>
+                                );
+                              })}
+                            </div>
+                          </ScrollArea>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </TabsContent>
                 </Tabs>
@@ -1024,6 +1366,6 @@ export default function Dashboard() {
           </div>
         )}
       </main>
-    </div>
+    </SidebarProvider>
   );
 }
