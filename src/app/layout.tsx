@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Twitch Miner",
+  title: "Twitcher",
   description: "Dashboard for Twitch Channel Points Miner",
 };
 

@@ -47,9 +47,9 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-neutral-950 p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-900 to-neutral-950">
       <Card className="w-full max-w-md bg-neutral-900/50 border-neutral-800 text-neutral-100 backdrop-blur-sm shadow-2xl">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold tracking-tight">Twitch Miner Dashboard</CardTitle>
+          <CardTitle className="text-2xl font-bold tracking-tight">Twitcher Dashboard</CardTitle>
           <CardDescription className="text-neutral-400">
-            Enter your admin credentials to access the dashboard.
+            Twitch Points & Drops Miner. Enter your admin credentials.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin} className="flex flex-col gap-2">

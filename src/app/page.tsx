@@ -27,7 +27,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Play, Square, Settings, RefreshCw, ChevronDown, Calendar, Plus, LogOut, Trash2, Activity, Terminal, Clock, Smile, Gift, Check, ExternalLink } from "lucide-react";
+import { Play, Square, Settings, RefreshCw, ChevronDown, Calendar, Plus, LogOut, Trash2, Activity, Terminal, Clock, Smile, Gift, Check, ExternalLink, RotateCw, Loader2, MoreHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import EmojiPicker, { Theme, EmojiStyle, Emoji } from "emoji-picker-react";
@@ -75,7 +75,7 @@ export default function Dashboard() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newBotName, setNewBotName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<{ name: string, type: 'start' | 'stop' | 'restart' | 'delete' } | null>(null);
   const [deleteBotName, setDeleteBotName] = useState<string | null>(null);
   const [addBotError, setAddBotError] = useState<string | null>(null);
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
@@ -89,7 +89,7 @@ export default function Dashboard() {
     const target = e.currentTarget;
     // Ignore scroll events when the container is hidden
     if (target.clientHeight === 0) return;
-    
+
     const isAtBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 50;
     setIsLogsScrolledUp(!isAtBottom);
   };
@@ -125,7 +125,7 @@ export default function Dashboard() {
   const [endDate, setEndDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
-  
+
   const [filterStartTs, setFilterStartTs] = useState<number | null>(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const [filterEndTs, setFilterEndTs] = useState<number | null>(Date.now());
 
@@ -192,19 +192,19 @@ export default function Dashboard() {
     const e = absEndDate || endDate;
     setStartDate(s);
     setEndDate(e);
-    
+
     let startTs = new Date(s).getTime();
     if (absStartTime) {
       startTs = new Date(`${s}T${absStartTime}`).getTime();
     }
-    
+
     let endTs = new Date(e).getTime();
     if (absEndTime) {
       endTs = new Date(`${e}T${absEndTime}`).getTime();
     } else {
       endTs = new Date(`${e}T23:59:59`).getTime();
     }
-    
+
     setFilterStartTs(startTs);
     setFilterEndTs(endTs);
 
@@ -225,7 +225,7 @@ export default function Dashboard() {
   const [isStreamerGridOpen, setIsStreamerGridOpen] = useState(false);
   const [drops, setDrops] = useState<Drop[]>([]);
   const [dropsLoading, setDropsLoading] = useState(false);
-  
+
   const router = useRouter();
 
   useEffect(() => {
@@ -289,7 +289,7 @@ export default function Dashboard() {
       if (queryString) {
         url += `?${queryString}`;
       }
-      
+
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -316,7 +316,7 @@ export default function Dashboard() {
   };
 
   const handleStart = async (name: string) => {
-    setActionLoading(name);
+    setActionLoading({ name, type: 'start' });
     try {
       await fetch(`${API_BASE}/bots/${name}/start`, { method: "POST" });
       await fetchBots();
@@ -331,7 +331,7 @@ export default function Dashboard() {
   };
 
   const handleStop = async (name: string) => {
-    setActionLoading(name);
+    setActionLoading({ name, type: 'stop' });
     try {
       await fetch(`${API_BASE}/bots/${name}/stop`, { method: "POST" });
       await fetchBots();
@@ -345,8 +345,35 @@ export default function Dashboard() {
     }
   };
 
+  const handleRestart = async (name: string) => {
+    setActionLoading({ name, type: 'restart' });
+    try {
+      await fetch(`${API_BASE}/bots/${name}/restart`, { method: "POST" });
+
+      // Poll to ensure bot is Running
+      for (let i = 0; i < 15; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        const res = await fetch(`${API_BASE}/bots`);
+        const botsData = await res.json();
+        const thisBot = botsData.find((b: any) => b.name === name);
+        if (thisBot && thisBot.status === 'Running') {
+          break;
+        }
+      }
+
+      await fetchBots();
+      if (selectedBot === name) {
+        fetchLogs(name);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleDelete = async (name: string) => {
-    setActionLoading(name);
+    setActionLoading({ name, type: 'delete' });
     try {
       await fetch(`${API_BASE}/bots/${name}`, { method: "DELETE" });
       setDeleteBotName(null);
@@ -468,16 +495,19 @@ export default function Dashboard() {
         <SidebarHeader className="h-16 border-b border-neutral-800 flex justify-center shrink-0">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" tooltip="Twitch Miner" className="hover:bg-transparent data-[state=open]:bg-transparent group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:!justify-center">
+              <SidebarMenuButton size="lg" tooltip="Twitcher" className="hover:bg-transparent data-[state=open]:bg-transparent group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:!justify-center">
                 <div className="w-8 h-8 flex items-center justify-center shrink-0">
                   <Activity className="w-5 h-5 text-indigo-500" />
                 </div>
-                <h1 className="font-bold text-lg tracking-tight ml-2 group-data-[collapsible=icon]:hidden">Twitch Miner</h1>
+                <div className="flex flex-col gap-0.5 ml-2 group-data-[collapsible=icon]:hidden truncate">
+                  <h1 className="font-bold text-base tracking-tight leading-none">Twitcher</h1>
+                  <span className="text-xs text-muted-foreground truncate">Twitch Points & Drops Miner</span>
+                </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
-        
+
         <SidebarContent>
           <ScrollArea className="flex-1 w-full">
             <SidebarGroup>
@@ -487,79 +517,79 @@ export default function Dashboard() {
                   <Plus className="w-4 h-4" strokeWidth={2.5} />
                 </button>
               </div>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-1">
-                {/* Collapsed Add Bot Button */}
-                <SidebarMenuItem className="hidden group-data-[collapsible=icon]:block mb-2 mt-2">
-                  <SidebarMenuButton 
-                    onClick={() => setIsAddOpen(true)} 
-                    tooltip="Add Bot" 
-                    className="text-neutral-400 hover:text-white justify-center"
-                  >
-                    <Plus className="w-4 h-4 shrink-0" strokeWidth={2.5} />
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                {bots.map((bot) => (
-                  <SidebarMenuItem key={bot.name}>
-                    <SidebarMenuButton 
-                      isActive={selectedBot === bot.name} 
-                      onClick={() => { setSelectedBot(bot.name); fetchBots(); }}
-                      tooltip={bot.name}
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-1">
+                  {/* Collapsed Add Bot Button */}
+                  <SidebarMenuItem className="hidden group-data-[collapsible=icon]:block mb-2 mt-2">
+                    <SidebarMenuButton
+                      onClick={() => setIsAddOpen(true)}
+                      tooltip="Add Bot"
+                      className="text-neutral-400 hover:text-white justify-center"
                     >
-                      <div className="w-4 h-4 flex items-center justify-center shrink-0">
-                        {bot.icon ? (
-                          <span className="text-sm leading-none flex items-center justify-center">
-                            {isUnifiedEmoji(bot.icon) ? (
-                              <Emoji unified={bot.icon} size={16} emojiStyle={EmojiStyle.APPLE} />
-                            ) : (
-                              bot.icon
-                            )}
-                          </span>
-                        ) : (
-                          <div className={`w-2 h-2 rounded-full ${bot.status === 'Running' ? 'bg-green-500' : 'bg-neutral-500'}`} />
-                        )}
-                      </div>
-                      <span className="group-data-[collapsible=icon]:hidden">{bot.name}</span>
+                      <Plus className="w-4 h-4 shrink-0" strokeWidth={2.5} />
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                ))}
-                
-                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                  {/* Add Bot dialog is controlled via state */}
-                  <DialogContent className="bg-neutral-800 border-neutral-600 text-white shadow-2xl sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Add New Bot</DialogTitle>
-                      <DialogDescription className="text-neutral-400">
-                        Enter the bot username. Ensure you have copied your .pkl cookie file to the cookies directory on the server.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleAddBot}>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="name">Twitch Username</Label>
-                          <Input
-                            id="name"
-                            value={newBotName}
-                            onChange={(e) => setNewBotName(e.target.value)}
-                            className="bg-neutral-800 border-neutral-700"
-                            required
-                          />
+                  {bots.map((bot) => (
+                    <SidebarMenuItem key={bot.name}>
+                      <SidebarMenuButton
+                        isActive={selectedBot === bot.name}
+                        onClick={() => { setSelectedBot(bot.name); fetchBots(); }}
+                        tooltip={bot.name}
+                      >
+                        <div className="w-4 h-4 flex items-center justify-center shrink-0">
+                          {bot.icon ? (
+                            <span className="text-sm leading-none flex items-center justify-center">
+                              {isUnifiedEmoji(bot.icon) ? (
+                                <Emoji unified={bot.icon} size={16} emojiStyle={EmojiStyle.APPLE} />
+                              ) : (
+                                bot.icon
+                              )}
+                            </span>
+                          ) : (
+                            <div className={`w-2 h-2 rounded-full ${bot.status === 'Running' ? 'bg-green-500' : 'bg-neutral-500'}`} />
+                          )}
                         </div>
-                        {addBotError && (
-                          <div className="text-red-500 text-sm">
-                            {addBotError}
+                        <span className="group-data-[collapsible=icon]:hidden">{bot.name}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+
+                  <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                    {/* Add Bot dialog is controlled via state */}
+                    <DialogContent className="bg-neutral-800 border-neutral-600 text-white shadow-2xl sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Add New Bot</DialogTitle>
+                        <DialogDescription className="text-neutral-400">
+                          Enter the bot username. Ensure you have copied your .pkl cookie file to the cookies directory on the server.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <form onSubmit={handleAddBot}>
+                        <div className="grid gap-4 py-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="name">Twitch Username</Label>
+                            <Input
+                              id="name"
+                              value={newBotName}
+                              onChange={(e) => setNewBotName(e.target.value)}
+                              className="bg-neutral-800 border-neutral-700"
+                              required
+                            />
                           </div>
-                        )}
-                      </div>
-                      <DialogFooter>
-                        <Button type="submit">Create Bot</Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                          {addBotError && (
+                            <div className="text-red-500 text-sm">
+                              {addBotError}
+                            </div>
+                          )}
+                        </div>
+                        <DialogFooter>
+                          <Button type="submit">Create Bot</Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </ScrollArea>
         </SidebarContent>
 
@@ -650,10 +680,10 @@ export default function Dashboard() {
                         Choose Emoji
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 border-none bg-transparent" align="start">
-                        <EmojiPicker 
-                          theme={Theme.DARK} 
+                        <EmojiPicker
+                          theme={Theme.DARK}
                           emojiStyle={EmojiStyle.APPLE}
-                          onEmojiClick={(emojiData) => setSettingsIcon(emojiData.unified)} 
+                          onEmojiClick={(emojiData) => setSettingsIcon(emojiData.unified)}
                         />
                       </PopoverContent>
                     </Popover>
@@ -692,10 +722,10 @@ export default function Dashboard() {
                     <div className={`w-2 h-2 rounded-full ${bot?.status === 'Running' ? 'bg-green-500' : 'bg-neutral-500'}`} />
                     {bot?.status}
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-7 w-7 text-neutral-400 hover:text-white rounded-full bg-neutral-800" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-neutral-400 hover:text-white rounded-full bg-neutral-800"
                     onClick={async () => {
                       setIsRefreshingStatus(true);
                       await fetchBots();
@@ -707,34 +737,81 @@ export default function Dashboard() {
                   </Button>
                 </div>
                 <div className="flex items-center gap-2">
-                  {bot?.status === 'Running' ? (
-                    <Button variant="destructive" size="sm" onClick={() => handleStop(selectedBot)} disabled={actionLoading === selectedBot}>
-                      <Square className="w-4 h-4 mr-2 fill-current" />
-                      {actionLoading === selectedBot ? "Stopping..." : "Stop"}
-                    </Button>
+                  {((bot?.status === 'Running' && !(actionLoading?.name === selectedBot && actionLoading?.type === 'start')) ||
+                    (actionLoading?.name === selectedBot && (actionLoading?.type === 'stop' || actionLoading?.type === 'restart'))) ? (
+                    <div className="flex -space-x-px">
+                      <Button
+                        variant={actionLoading?.name === selectedBot && actionLoading?.type === 'restart' ? "default" : "destructive"}
+                        size="sm"
+                        onClick={() => actionLoading?.name === selectedBot && actionLoading?.type === 'restart' ? null : handleStop(selectedBot)}
+                        disabled={actionLoading?.name === selectedBot}
+                        className={`z-10 ${actionLoading?.name === selectedBot && actionLoading?.type === 'restart'
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white w-full'
+                            : 'rounded-r-none'
+                          }`}
+                      >
+                        {actionLoading?.name === selectedBot && (actionLoading?.type === 'stop' || actionLoading?.type === 'restart') ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Square className="w-4 h-4 mr-2 fill-current" />
+                        )}
+                        {actionLoading?.name === selectedBot && actionLoading?.type === 'stop' ? "Stopping..." : actionLoading?.name === selectedBot && actionLoading?.type === 'restart' ? "Restarting..." : "Stop"}
+                      </Button>
+
+                      {!(actionLoading?.name === selectedBot && actionLoading?.type === 'restart') && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="rounded-l-none px-2 z-20 focus-visible:ring-0 focus:ring-0 outline-none"
+                              disabled={actionLoading?.name === selectedBot}
+                            />
+                          }>
+                            <MoreHorizontal className="w-4 h-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40 bg-neutral-900 border-neutral-800 text-white">
+                            <DropdownMenuItem
+                              className="cursor-pointer text-blue-400 hover:bg-neutral-800 focus:bg-neutral-800 focus:text-blue-300"
+                              onClick={() => {
+                                handleRestart(selectedBot);
+                                setTimeout(() => fetchBots(), 2000);
+                              }}
+                            >
+                              <RotateCw className="w-4 h-4 mr-2" />
+                              Restart
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   ) : (
-                    <Button className="bg-green-600 hover:bg-green-700 text-white" size="sm" onClick={() => handleStart(selectedBot)} disabled={actionLoading === selectedBot}>
-                      <Play className="w-4 h-4 mr-2 fill-current" />
-                      {actionLoading === selectedBot ? "Starting..." : "Start"}
+                    <Button className="bg-green-600 hover:bg-green-700 text-white" size="sm" onClick={() => handleStart(selectedBot)} disabled={actionLoading?.name === selectedBot}>
+                      {actionLoading?.name === selectedBot && actionLoading?.type === 'start' ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Play className="w-4 h-4 mr-2 fill-current" />
+                      )}
+                      {actionLoading?.name === selectedBot && actionLoading?.type === 'start' ? "Starting..." : "Start"}
                     </Button>
                   )}
-                  
+
                   <DropdownMenu>
                     <DropdownMenuTrigger className="flex h-9 w-9 items-center justify-center rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 ml-2 transition-colors">
                       <Settings className="w-5 h-5" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 bg-neutral-900 border-neutral-800 text-white">
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         className="cursor-pointer hover:bg-neutral-800 focus:bg-neutral-800 focus:text-white"
                         onClick={() => setTimeout(() => handleOpenSettings(), 0)}
-                        disabled={actionLoading === selectedBot}
+                        disabled={actionLoading?.name === selectedBot}
                       >
                         Bot Settings
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         className="cursor-pointer text-red-500 hover:bg-neutral-800 hover:text-red-400 focus:bg-neutral-800 focus:text-red-400"
                         onClick={() => setTimeout(() => setDeleteBotName(selectedBot), 0)}
-                        disabled={actionLoading === selectedBot}
+                        disabled={actionLoading?.name === selectedBot}
                       >
                         Delete Bot
                       </DropdownMenuItem>
@@ -760,17 +837,17 @@ export default function Dashboard() {
                       Drops & Rewards
                     </TabsTrigger>
                   </TabsList>
-                  
+
                   <TabsContent value="logs" className="flex-1 mt-4 data-[state=inactive]:hidden flex flex-col min-h-0">
                     <Card className="flex-1 bg-neutral-900 border-neutral-800 flex flex-col min-h-0">
                       <CardHeader className="py-3 px-4 border-b border-neutral-800 shrink-0">
                         <CardTitle className="text-sm font-medium flex items-center justify-between text-neutral-200">
                           Live Terminal Output
                           <div className="flex items-center gap-2">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 text-neutral-400 hover:text-white" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-neutral-400 hover:text-white"
                               onClick={async () => {
                                 setIsRefreshingLogs(true);
                                 await fetchLogs(selectedBot);
@@ -780,10 +857,10 @@ export default function Dashboard() {
                             >
                               <RefreshCw className={`w-3 h-3 ${isRefreshingLogs ? 'animate-spin' : ''}`} />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 text-red-400 hover:text-red-300 hover:bg-red-950/30" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-red-400 hover:text-red-300 hover:bg-red-950/30"
                               onClick={() => handleClearLogs(selectedBot)}
                               title="Clear Logs"
                             >
@@ -818,46 +895,46 @@ export default function Dashboard() {
                       </CardContent>
                     </Card>
                   </TabsContent>
-                  
+
                   <TabsContent value="analytics" className="flex-1 mt-4 data-[state=inactive]:hidden flex flex-col min-h-0">
                     <ScrollArea className="flex-1">
                       <div className="flex flex-col gap-4 pr-4 pb-4">
-                      {/* Global Total Points Card */}
-                      <Card className="bg-neutral-900 border-neutral-800 shrink-0">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm text-neutral-400">Global Total Points</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-3xl font-bold text-white">
-                            {analytics ? Object.values(analytics).reduce((sum: number, streamerData: any) => {
-                              const series = streamerData.series;
-                              if (series && series.length > 0) return sum + series[series.length - 1].y;
-                              return sum;
-                            }, 0).toLocaleString() : '—'}
-                          </div>
-                        </CardContent>
-                      </Card>
+                        {/* Global Total Points Card */}
+                        <Card className="bg-neutral-900 border-neutral-800 shrink-0">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm text-neutral-400">Global Total Points</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-3xl font-bold text-white">
+                              {analytics ? Object.values(analytics).reduce((sum: number, streamerData: any) => {
+                                const series = streamerData.series;
+                                if (series && series.length > 0) return sum + series[series.length - 1].y;
+                                return sum;
+                              }, 0).toLocaleString() : '—'}
+                            </div>
+                          </CardContent>
+                        </Card>
 
-                      {/* Sort label + HR + expand/collapse */}
-                      <div className="flex items-center gap-3 shrink-0">
-                        <div className="flex items-center gap-2 shrink-0">
+                        {/* Sort label + HR + expand/collapse */}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => setStreamerSort(streamerSort === "points" ? "name" : "points")}
+                              className="text-xs text-neutral-400 hover:text-neutral-200 transition-colors whitespace-nowrap cursor-pointer"
+                            >
+                              {streamerSort === "points" ? "Sorted by most points" : "Sorted by name"}
+                            </button>
+                          </div>
+                          <div className="flex-1 border-t border-neutral-700" />
                           <button
-                            onClick={() => setStreamerSort(streamerSort === "points" ? "name" : "points")}
-                            className="text-xs text-neutral-400 hover:text-neutral-200 transition-colors whitespace-nowrap cursor-pointer"
+                            onClick={() => setIsStreamerGridOpen(!isStreamerGridOpen)}
+                            className="text-neutral-400 hover:text-white transition-all shrink-0"
                           >
-                            {streamerSort === "points" ? "Sorted by most points" : "Sorted by name"}
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isStreamerGridOpen ? '' : '-rotate-90'}`} />
                           </button>
                         </div>
-                        <div className="flex-1 border-t border-neutral-700" />
-                        <button
-                          onClick={() => setIsStreamerGridOpen(!isStreamerGridOpen)}
-                          className="text-neutral-400 hover:text-white transition-all shrink-0"
-                        >
-                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isStreamerGridOpen ? '' : '-rotate-90'}`} />
-                        </button>
-                      </div>
 
-                      {/* Points Per Streamer Grid */}
+                        {/* Points Per Streamer Grid */}
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
                           {analytics && (() => {
                             const entries = Object.entries(analytics).map(([streamer, data]: [string, any]) => {
@@ -885,376 +962,374 @@ export default function Dashboard() {
                             ));
                           })()}
                         </div>
-                      
-                      {/* Points History Chart */}
-                      <Card className="bg-neutral-900 border-neutral-800 flex flex-col mb-6 overflow-visible">
-                        <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3 gap-4 flex-wrap overflow-visible">
-                          <CardTitle className="text-lg text-white">Points History</CardTitle>
-                          <div className="flex items-center gap-3 flex-wrap">
-                            {/* AWS-style Time Range Picker */}
-                            <div className="relative" ref={timePickerRef}>
-                              <button
-                                onClick={() => setIsTimePickerOpen(!isTimePickerOpen)}
-                                className="flex items-center gap-2 bg-neutral-800 border border-neutral-700 text-white rounded-md px-3 py-1.5 text-sm hover:border-neutral-500 transition-colors h-9"
-                              >
-                                <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-                                <span className="text-xs">{timeRangeLabel}</span>
-                              </button>
 
-                              {isTimePickerOpen && (
-                                <div className="absolute right-0 top-full mt-2 z-[100] w-[340px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl">
-                                  {/* Tabs */}
-                                  <div className="flex items-center gap-1 p-3 pb-2">
-                                    <button
-                                      onClick={() => setTimePickerTab("relative")}
-                                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                                        timePickerTab === "relative"
-                                          ? "bg-sky-600 text-white"
-                                          : "text-neutral-400 hover:text-white hover:bg-neutral-800"
-                                      }`}
-                                    >
-                                      Relative range
-                                    </button>
-                                    <button
-                                      onClick={() => setTimePickerTab("absolute")}
-                                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                                        timePickerTab === "absolute"
-                                          ? "bg-sky-600 text-white"
-                                          : "text-neutral-400 hover:text-white hover:bg-neutral-800"
-                                      }`}
-                                    >
-                                      Absolute range
-                                    </button>
-                                  </div>
+                        {/* Points History Chart */}
+                        <Card className="bg-neutral-900 border-neutral-800 flex flex-col mb-6 overflow-visible">
+                          <CardHeader className="flex flex-row items-center justify-between shrink-0 py-3 gap-4 flex-wrap overflow-visible">
+                            <CardTitle className="text-lg text-white">Points History</CardTitle>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {/* AWS-style Time Range Picker */}
+                              <div className="relative" ref={timePickerRef}>
+                                <button
+                                  onClick={() => setIsTimePickerOpen(!isTimePickerOpen)}
+                                  className="flex items-center gap-2 bg-neutral-800 border border-neutral-700 text-white rounded-md px-3 py-1.5 text-sm hover:border-neutral-500 transition-colors h-9"
+                                >
+                                  <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+                                  <span className="text-xs">{timeRangeLabel}</span>
+                                </button>
 
-                                  <div className="border-t border-neutral-800" />
+                                {isTimePickerOpen && (
+                                  <div className="absolute right-0 top-full mt-2 z-[100] w-[340px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl">
+                                    {/* Tabs */}
+                                    <div className="flex items-center gap-1 p-3 pb-2">
+                                      <button
+                                        onClick={() => setTimePickerTab("relative")}
+                                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${timePickerTab === "relative"
+                                            ? "bg-sky-600 text-white"
+                                            : "text-neutral-400 hover:text-white hover:bg-neutral-800"
+                                          }`}
+                                      >
+                                        Relative range
+                                      </button>
+                                      <button
+                                        onClick={() => setTimePickerTab("absolute")}
+                                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${timePickerTab === "absolute"
+                                            ? "bg-sky-600 text-white"
+                                            : "text-neutral-400 hover:text-white hover:bg-neutral-800"
+                                          }`}
+                                      >
+                                        Absolute range
+                                      </button>
+                                    </div>
 
-                                  {timePickerTab === "relative" ? (
-                                    <div className="p-3">
-                                      <p className="text-xs font-medium text-neutral-300 mb-2">Choose a range</p>
-                                      <div className="space-y-0.5">
-                                        {[
-                                          { value: "1h", label: "Since 1 hour ago" },
-                                          { value: "6h", label: "Since 6 hours ago" },
-                                          { value: "1d", label: "Since 1 day ago" },
-                                          { value: "3d", label: "Since 3 days ago" },
-                                          { value: "1w", label: "Since 1 week ago" },
-                                          { value: "2w", label: "Since 2 weeks ago" },
-                                          { value: "1m", label: "Since 1 month ago" },
-                                        ].map((opt) => (
-                                          <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-neutral-800 cursor-pointer">
+                                    <div className="border-t border-neutral-800" />
+
+                                    {timePickerTab === "relative" ? (
+                                      <div className="p-3">
+                                        <p className="text-xs font-medium text-neutral-300 mb-2">Choose a range</p>
+                                        <div className="space-y-0.5">
+                                          {[
+                                            { value: "1h", label: "Since 1 hour ago" },
+                                            { value: "6h", label: "Since 6 hours ago" },
+                                            { value: "1d", label: "Since 1 day ago" },
+                                            { value: "3d", label: "Since 3 days ago" },
+                                            { value: "1w", label: "Since 1 week ago" },
+                                            { value: "2w", label: "Since 2 weeks ago" },
+                                            { value: "1m", label: "Since 1 month ago" },
+                                          ].map((opt) => (
+                                            <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-neutral-800 cursor-pointer">
+                                              <input
+                                                type="radio"
+                                                name="relRange"
+                                                checked={relativeRange === opt.value}
+                                                onChange={() => setRelativeRange(opt.value)}
+                                                className="accent-sky-500 w-3.5 h-3.5"
+                                              />
+                                              <span className="text-xs text-neutral-200">{opt.label}</span>
+                                            </label>
+                                          ))}
+                                          <label className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-neutral-800 cursor-pointer">
                                             <input
                                               type="radio"
                                               name="relRange"
-                                              checked={relativeRange === opt.value}
-                                              onChange={() => setRelativeRange(opt.value)}
-                                              className="accent-sky-500 w-3.5 h-3.5"
+                                              checked={relativeRange === "custom"}
+                                              onChange={() => setRelativeRange("custom")}
+                                              className="accent-sky-500 w-3.5 h-3.5 mt-0.5"
                                             />
-                                            <span className="text-xs text-neutral-200">{opt.label}</span>
+                                            <div>
+                                              <span className="text-xs text-neutral-200 font-medium">Custom range</span>
+                                              <p className="text-[10px] text-neutral-500">Set a custom range in the past</p>
+                                            </div>
                                           </label>
-                                        ))}
-                                        <label className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-neutral-800 cursor-pointer">
-                                          <input
-                                            type="radio"
-                                            name="relRange"
-                                            checked={relativeRange === "custom"}
-                                            onChange={() => setRelativeRange("custom")}
-                                            className="accent-sky-500 w-3.5 h-3.5 mt-0.5"
-                                          />
-                                          <div>
-                                            <span className="text-xs text-neutral-200 font-medium">Custom range</span>
-                                            <p className="text-[10px] text-neutral-500">Set a custom range in the past</p>
-                                          </div>
-                                        </label>
-                                      </div>
+                                        </div>
 
-                                      {relativeRange === "custom" && (
-                                        <div className="flex gap-2 mt-3">
-                                          <div className="flex-1">
-                                            <p className="text-[10px] text-neutral-400 mb-1">Duration</p>
+                                        {relativeRange === "custom" && (
+                                          <div className="flex gap-2 mt-3">
+                                            <div className="flex-1">
+                                              <p className="text-[10px] text-neutral-400 mb-1">Duration</p>
+                                              <input
+                                                type="number"
+                                                min={customUnit === "minute" ? 5 : 1}
+                                                value={customDuration}
+                                                onChange={(e) => setCustomDuration(e.target.value)}
+                                                placeholder="Enter duration"
+                                                className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
+                                              />
+                                            </div>
+                                            <div className="flex-1">
+                                              <p className="text-[10px] text-neutral-400 mb-1">Unit of time</p>
+                                              <select
+                                                value={customUnit}
+                                                onChange={(e) => setCustomUnit(e.target.value)}
+                                                className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs appearance-none"
+                                              >
+                                                <option value="minute">minute</option>
+                                                <option value="hour">hour</option>
+                                                <option value="day">day</option>
+                                              </select>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Footer */}
+                                        <div className="flex items-center justify-between mt-4 pt-3 border-t border-neutral-800">
+                                          <button onClick={() => { setIsTimePickerOpen(false); }} className="text-xs text-sky-400 hover:text-sky-300">
+                                            Cancel
+                                          </button>
+                                          <button
+                                            onClick={() => applyRelativeRange(relativeRange)}
+                                            className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-md font-medium transition-colors"
+                                          >
+                                            Apply
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="p-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                            <p className="text-[10px] text-neutral-400 mb-1">Start date</p>
                                             <input
-                                              type="number"
-                                              min={customUnit === "minute" ? 5 : 1}
-                                              value={customDuration}
-                                              onChange={(e) => setCustomDuration(e.target.value)}
-                                              placeholder="Enter duration"
+                                              type="date"
+                                              value={absStartDate || startDate}
+                                              onChange={(e) => setAbsStartDate(e.target.value)}
                                               className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
                                             />
                                           </div>
-                                          <div className="flex-1">
-                                            <p className="text-[10px] text-neutral-400 mb-1">Unit of time</p>
-                                            <select
-                                              value={customUnit}
-                                              onChange={(e) => setCustomUnit(e.target.value)}
-                                              className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs appearance-none"
-                                            >
-                                              <option value="minute">minute</option>
-                                              <option value="hour">hour</option>
-                                              <option value="day">day</option>
-                                            </select>
+                                          <div>
+                                            <p className="text-[10px] text-neutral-400 mb-1">Start time</p>
+                                            <input
+                                              type="time"
+                                              step="1"
+                                              value={absStartTime}
+                                              onChange={(e) => setAbsStartTime(e.target.value)}
+                                              placeholder="hh:mm:ss"
+                                              className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
+                                            />
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] text-neutral-400 mb-1">End date</p>
+                                            <input
+                                              type="date"
+                                              value={absEndDate || endDate}
+                                              onChange={(e) => setAbsEndDate(e.target.value)}
+                                              className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
+                                            />
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] text-neutral-400 mb-1">End time</p>
+                                            <input
+                                              type="time"
+                                              step="1"
+                                              value={absEndTime}
+                                              onChange={(e) => setAbsEndTime(e.target.value)}
+                                              placeholder="hh:mm:ss"
+                                              className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
+                                            />
                                           </div>
                                         </div>
-                                      )}
+                                        <p className="text-[10px] text-neutral-500 mt-2">Use YYYY/MM/DD for date. Time is 24h format.</p>
 
-                                      {/* Footer */}
-                                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-neutral-800">
-                                        <button onClick={() => { setIsTimePickerOpen(false); }} className="text-xs text-sky-400 hover:text-sky-300">
-                                          Cancel
-                                        </button>
-                                        <button
-                                          onClick={() => applyRelativeRange(relativeRange)}
-                                          className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-md font-medium transition-colors"
-                                        >
-                                          Apply
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="p-3">
-                                      <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                          <p className="text-[10px] text-neutral-400 mb-1">Start date</p>
-                                          <input
-                                            type="date"
-                                            value={absStartDate || startDate}
-                                            onChange={(e) => setAbsStartDate(e.target.value)}
-                                            className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
-                                          />
-                                        </div>
-                                        <div>
-                                          <p className="text-[10px] text-neutral-400 mb-1">Start time</p>
-                                          <input
-                                            type="time"
-                                            step="1"
-                                            value={absStartTime}
-                                            onChange={(e) => setAbsStartTime(e.target.value)}
-                                            placeholder="hh:mm:ss"
-                                            className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
-                                          />
-                                        </div>
-                                        <div>
-                                          <p className="text-[10px] text-neutral-400 mb-1">End date</p>
-                                          <input
-                                            type="date"
-                                            value={absEndDate || endDate}
-                                            onChange={(e) => setAbsEndDate(e.target.value)}
-                                            className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
-                                          />
-                                        </div>
-                                        <div>
-                                          <p className="text-[10px] text-neutral-400 mb-1">End time</p>
-                                          <input
-                                            type="time"
-                                            step="1"
-                                            value={absEndTime}
-                                            onChange={(e) => setAbsEndTime(e.target.value)}
-                                            placeholder="hh:mm:ss"
-                                            className="w-full bg-neutral-800 border border-neutral-700 text-white rounded px-2 py-1.5 text-xs"
-                                          />
+                                        {/* Footer */}
+                                        <div className="flex items-center justify-between mt-4 pt-3 border-t border-neutral-800">
+                                          <button onClick={() => { setIsTimePickerOpen(false); }} className="text-xs text-sky-400 hover:text-sky-300">
+                                            Cancel
+                                          </button>
+                                          <button
+                                            onClick={applyAbsoluteRange}
+                                            className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-md font-medium transition-colors"
+                                          >
+                                            Apply
+                                          </button>
                                         </div>
                                       </div>
-                                      <p className="text-[10px] text-neutral-500 mt-2">Use YYYY/MM/DD for date. Time is 24h format.</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
 
-                                      {/* Footer */}
-                                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-neutral-800">
-                                        <button onClick={() => { setIsTimePickerOpen(false); }} className="text-xs text-sky-400 hover:text-sky-300">
-                                          Cancel
-                                        </button>
-                                        <button
-                                          onClick={applyAbsoluteRange}
-                                          className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-md font-medium transition-colors"
-                                        >
-                                          Apply
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger className="flex h-9 w-[180px] items-center justify-between rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-white">
+                                  {analyticsFilter.includes("All") ? "All Streamers" : `${analyticsFilter.length} Selected`}
+                                  <ChevronDown className="h-4 w-4 opacity-50" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-[180px] bg-neutral-800 border-neutral-700 text-white max-h-[300px] overflow-y-auto">
+                                  <DropdownMenuCheckboxItem
+                                    checked={analyticsFilter.includes("All")}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setAnalyticsFilter(["All"]);
+                                      } else {
+                                        setAnalyticsFilter([]);
+                                      }
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    All Streamers
+                                  </DropdownMenuCheckboxItem>
+                                  {analytics && Object.keys(analytics).map(streamer => {
+                                    const isChecked = analyticsFilter.includes(streamer);
+                                    const isDisabled = !isChecked && !analyticsFilter.includes("All") && analyticsFilter.length >= 5;
+                                    return (
+                                      <DropdownMenuCheckboxItem
+                                        key={streamer}
+                                        checked={isChecked}
+                                        disabled={isDisabled}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            setAnalyticsFilter(prev => {
+                                              const next = prev.filter(s => s !== "All");
+                                              if (next.length >= 5) return prev;
+                                              return [...next, streamer];
+                                            });
+                                          } else {
+                                            setAnalyticsFilter(prev => {
+                                              const next = prev.filter(s => s !== "All" && s !== streamer);
+                                              if (next.length === 0) return ["All"];
+                                              return next;
+                                            });
+                                          }
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        {streamer}
+                                      </DropdownMenuCheckboxItem>
+                                    );
+                                  })}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
+                          </CardHeader>
+                          <CardContent className="relative p-4">
+                            {analytics && Object.keys(analytics).length > 0 ? (() => {
+                              let chartData: any[] = [];
+                              let selectedStreamers: string[] = [];
 
-                            <DropdownMenu>
-                              <DropdownMenuTrigger className="flex h-9 w-[180px] items-center justify-between rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-white">
-                                {analyticsFilter.includes("All") ? "All Streamers" : `${analyticsFilter.length} Selected`}
-                                <ChevronDown className="h-4 w-4 opacity-50" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-[180px] bg-neutral-800 border-neutral-700 text-white max-h-[300px] overflow-y-auto">
-                                <DropdownMenuCheckboxItem
-                                  checked={analyticsFilter.includes("All")}
-                                  onCheckedChange={(checked) => {
-                                    if (checked) {
-                                      setAnalyticsFilter(["All"]);
-                                    } else {
-                                      setAnalyticsFilter([]);
-                                    }
-                                  }}
-                                  className="cursor-pointer"
-                                >
-                                  All Streamers
-                                </DropdownMenuCheckboxItem>
-                                {analytics && Object.keys(analytics).map(streamer => {
-                                  const isChecked = analyticsFilter.includes(streamer);
-                                  const isDisabled = !isChecked && !analyticsFilter.includes("All") && analyticsFilter.length >= 5;
-                                  return (
-                                    <DropdownMenuCheckboxItem
-                                      key={streamer}
-                                      checked={isChecked}
-                                      disabled={isDisabled}
-                                      onCheckedChange={(checked) => {
-                                        if (checked) {
-                                          setAnalyticsFilter(prev => {
-                                            const next = prev.filter(s => s !== "All");
-                                            if (next.length >= 5) return prev;
-                                            return [...next, streamer];
-                                          });
-                                        } else {
-                                          setAnalyticsFilter(prev => {
-                                            const next = prev.filter(s => s !== "All" && s !== streamer);
-                                            if (next.length === 0) return ["All"];
-                                            return next;
-                                          });
-                                        }
-                                      }}
-                                      className="cursor-pointer"
-                                    >
-                                      {streamer}
-                                    </DropdownMenuCheckboxItem>
-                                  );
-                                })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="relative p-4">
-                          {analytics && Object.keys(analytics).length > 0 ? (() => {
-                            let chartData: any[] = [];
-                            let selectedStreamers: string[] = [];
-
-                            if (analyticsFilter.includes("All")) {
-                              selectedStreamers = ["global_points"];
-                              const allEvents: { time: number, streamer: string, y: number }[] = [];
-                              Object.entries(analytics).forEach(([streamer, data]: [string, any]) => {
-                                if (data.series) {
-                                  data.series.forEach((pt: any) => {
-                                    allEvents.push({ time: pt.x, streamer, y: pt.y });
-                                  });
+                              if (analyticsFilter.includes("All")) {
+                                selectedStreamers = ["global_points"];
+                                const allEvents: { time: number, streamer: string, y: number }[] = [];
+                                Object.entries(analytics).forEach(([streamer, data]: [string, any]) => {
+                                  if (data.series) {
+                                    data.series.forEach((pt: any) => {
+                                      allEvents.push({ time: pt.x, streamer, y: pt.y });
+                                    });
+                                  }
+                                });
+                                allEvents.sort((a, b) => a.time - b.time);
+                                const latestPoints: Record<string, number> = {};
+                                allEvents.forEach(ev => {
+                                  latestPoints[ev.streamer] = ev.y;
+                                  const total = Object.values(latestPoints).reduce((sum, val) => sum + val, 0);
+                                  chartData.push({ x: ev.time, "global_points": total });
+                                });
+                              } else {
+                                selectedStreamers = analyticsFilter;
+                                if (selectedStreamers.length === 0) {
+                                  return <div className="w-full h-full flex items-center justify-center text-neutral-500 italic">No streamers selected.</div>;
                                 }
-                              });
-                              allEvents.sort((a, b) => a.time - b.time);
-                              const latestPoints: Record<string, number> = {};
-                              allEvents.forEach(ev => {
-                                latestPoints[ev.streamer] = ev.y;
-                                const total = Object.values(latestPoints).reduce((sum, val) => sum + val, 0);
-                                chartData.push({ x: ev.time, "global_points": total });
-                              });
-                            } else {
-                              selectedStreamers = analyticsFilter;
-                              if (selectedStreamers.length === 0) {
-                                return <div className="w-full h-full flex items-center justify-center text-neutral-500 italic">No streamers selected.</div>;
+
+                                const allEvents: { time: number, streamer: string, y: number }[] = [];
+                                selectedStreamers.forEach(streamer => {
+                                  if (analytics[streamer]?.series) {
+                                    analytics[streamer].series.forEach((pt: any) => {
+                                      allEvents.push({ time: pt.x, streamer, y: pt.y });
+                                    });
+                                  }
+                                });
+
+                                allEvents.sort((a, b) => a.time - b.time);
+
+                                const latestPoints: Record<string, number> = {};
+                                allEvents.forEach(ev => {
+                                  latestPoints[ev.streamer] = ev.y;
+                                  chartData.push({ x: ev.time, ...latestPoints });
+                                });
                               }
 
-                              const allEvents: { time: number, streamer: string, y: number }[] = [];
-                              selectedStreamers.forEach(streamer => {
-                                if (analytics[streamer]?.series) {
-                                  analytics[streamer].series.forEach((pt: any) => {
-                                    allEvents.push({ time: pt.x, streamer, y: pt.y });
-                                  });
-                                }
-                              });
-                              
-                              allEvents.sort((a, b) => a.time - b.time);
-                              
-                              const latestPoints: Record<string, number> = {};
-                              allEvents.forEach(ev => {
-                                latestPoints[ev.streamer] = ev.y;
-                                chartData.push({ x: ev.time, ...latestPoints });
-                              });
-                            }
+                              if (filterStartTs !== null && filterEndTs !== null) {
+                                chartData = chartData.filter((pt: any) => pt.x >= filterStartTs && pt.x <= filterEndTs);
+                              }
 
-                            if (filterStartTs !== null && filterEndTs !== null) {
-                              chartData = chartData.filter((pt: any) => pt.x >= filterStartTs && pt.x <= filterEndTs);
-                            }
-                            
-                            const chartConfig = selectedStreamers.reduce((acc, streamer, index) => {
-                              const hue = (index * 137.5) % 360;
-                              acc[streamer] = {
-                                label: streamer === "global_points" ? "Global Points" : streamer,
-                                color: streamer === "global_points" ? "#10b981" : `hsl(${hue}, 70%, 50%)`,
-                              };
-                              return acc;
-                            }, {} as ChartConfig);
+                              const chartConfig = selectedStreamers.reduce((acc, streamer, index) => {
+                                const hue = (index * 137.5) % 360;
+                                acc[streamer] = {
+                                  label: streamer === "global_points" ? "Global Points" : streamer,
+                                  color: streamer === "global_points" ? "#10b981" : `hsl(${hue}, 70%, 50%)`,
+                                };
+                                return acc;
+                              }, {} as ChartConfig);
 
-                            return (
-                              <ChartContainer config={chartConfig} className="w-full h-[350px]">
-                                <LineChart margin={{ top: 10, right: 30, left: 10, bottom: 0 }} data={chartData}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                                  <XAxis 
-                                    dataKey="x" 
-                                    type="number"
-                                    domain={['dataMin', 'dataMax']} 
-                                    tickFormatter={(unixTime) => {
-                                      const d = new Date(unixTime);
-                                      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                    }}
-                                    stroke="#d4d4d4" 
-                                    tick={{ fontSize: 9 }}
-                                    angle={-45}
-                                    textAnchor="end"
-                                    ticks={(() => {
-                                      if (chartData.length <= 8) return undefined;
-                                      const min = chartData[0]?.x;
-                                      const max = chartData[chartData.length - 1]?.x;
-                                      if (!min || !max || min === max) return undefined;
-                                      const step = (max - min) / 7;
-                                      return Array.from({ length: 8 }, (_, i) => min + step * i);
-                                    })()}
-                                    height={50}
-                                    tickLine={false}
-                                    axisLine={false}
-                                  />
-                                  <YAxis 
-                                    stroke="#d4d4d4" 
-                                    tickFormatter={(value) => value.toLocaleString()} 
-                                    width={70} 
-                                    tickLine={false}
-                                    axisLine={false}
-                                    tickCount={10}
-                                    domain={['auto', 'auto']}
-                                  />
-                                  <ChartTooltip 
-                                    cursor={false} 
-                                    content={<ChartTooltipContent labelFormatter={(_, payload) => {
-                                      if (payload && payload.length > 0) {
-                                        return new Date(payload[0].payload.x).toLocaleString();
-                                      }
-                                      return "";
-                                    }} />} 
-                                  />
-                                  {selectedStreamers.map((streamer) => (
-                                    <Line 
-                                      key={streamer}
-                                      type="stepAfter" 
-                                      dataKey={streamer} 
-                                      stroke={`var(--color-${streamer})`}
-                                      strokeWidth={2}
-                                      dot={false}
-                                      isAnimationActive={false}
+                              return (
+                                <ChartContainer config={chartConfig} className="w-full h-[350px]">
+                                  <LineChart margin={{ top: 10, right: 30, left: 10, bottom: 0 }} data={chartData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                    <XAxis
+                                      dataKey="x"
+                                      type="number"
+                                      domain={['dataMin', 'dataMax']}
+                                      tickFormatter={(unixTime) => {
+                                        const d = new Date(unixTime);
+                                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                      }}
+                                      stroke="#d4d4d4"
+                                      tick={{ fontSize: 9 }}
+                                      angle={-45}
+                                      textAnchor="end"
+                                      ticks={(() => {
+                                        if (chartData.length <= 8) return undefined;
+                                        const min = chartData[0]?.x;
+                                        const max = chartData[chartData.length - 1]?.x;
+                                        if (!min || !max || min === max) return undefined;
+                                        const step = (max - min) / 7;
+                                        return Array.from({ length: 8 }, (_, i) => min + step * i);
+                                      })()}
+                                      height={50}
+                                      tickLine={false}
+                                      axisLine={false}
                                     />
-                                  ))}
-                                </LineChart>
-                              </ChartContainer>
-                            );
-                          })() : (
-                            <div className="w-full h-full flex items-center justify-center text-neutral-500 italic">
-                              No analytics data available yet.
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
+                                    <YAxis
+                                      stroke="#d4d4d4"
+                                      tickFormatter={(value) => value.toLocaleString()}
+                                      width={70}
+                                      tickLine={false}
+                                      axisLine={false}
+                                      tickCount={10}
+                                      domain={['auto', 'auto']}
+                                    />
+                                    <ChartTooltip
+                                      cursor={false}
+                                      content={<ChartTooltipContent labelFormatter={(_, payload) => {
+                                        if (payload && payload.length > 0) {
+                                          return new Date(payload[0].payload.x).toLocaleString();
+                                        }
+                                        return "";
+                                      }} />}
+                                    />
+                                    {selectedStreamers.map((streamer) => (
+                                      <Line
+                                        key={streamer}
+                                        type="stepAfter"
+                                        dataKey={streamer}
+                                        stroke={`var(--color-${streamer})`}
+                                        strokeWidth={2}
+                                        dot={false}
+                                        isAnimationActive={false}
+                                      />
+                                    ))}
+                                  </LineChart>
+                                </ChartContainer>
+                              );
+                            })() : (
+                              <div className="w-full h-full flex items-center justify-center text-neutral-500 italic">
+                                No analytics data available yet.
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
                     </ScrollArea>
                   </TabsContent>
-                  
+
                   <TabsContent value="drops" className="flex-1 mt-4 data-[state=inactive]:hidden flex flex-col min-h-0">
                     <div className="flex-1 flex flex-col min-h-0">
                       <div className="shrink-0 mb-4">
@@ -1263,7 +1338,7 @@ export default function Dashboard() {
                           Claimed drops are displayed below. If an account link is required, click the button to connect your game account.
                         </p>
                       </div>
-                      
+
                       {dropsLoading ? (
                         <div className="flex items-center justify-center p-12 text-neutral-500">
                           <RefreshCw className="w-6 h-6 animate-spin mr-2" /> Loading drops...
@@ -1275,7 +1350,7 @@ export default function Dashboard() {
                           const diffDays = (now.getTime() - end.getTime()) / (1000 * 60 * 60 * 24);
                           return diffDays <= 180;
                         });
-                        
+
                         if (validDrops.length === 0) {
                           return (
                             <div className="flex items-center justify-center p-12 text-neutral-500 italic">
@@ -1283,74 +1358,74 @@ export default function Dashboard() {
                             </div>
                           );
                         }
-                        
+
                         return (
                           <div className="flex-1 min-h-0">
                             <ScrollArea className="h-full w-full">
                               <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3 pr-4 pb-4">
-                              {validDrops.map((drop, idx) => {
-                                const end = new Date(drop.endAt);
-                                const diffHours = Math.floor((now.getTime() - end.getTime()) / (1000 * 60 * 60));
-                                const diffDays = Math.floor(diffHours / 24);
-                                let timeStr = "";
-                                if (diffHours < 0) {
-                                  timeStr = "recently";
-                                } else if (diffHours < 24) {
-                                  timeStr = `${Math.max(1, diffHours)} hours ago`;
-                                } else if (diffDays === 1) {
-                                  timeStr = "yesterday";
-                                } else if (diffDays <= 30) {
-                                  timeStr = `${diffDays} days ago`;
-                                } else if (diffDays <= 60) {
-                                  timeStr = "last month";
-                                } else {
-                                  timeStr = `${Math.floor(diffDays / 30)} months ago`;
-                                }
-                                
-                                return (
-                                  <Card key={`${drop.id}-${idx}`} className="bg-[#18181b] border-neutral-800 flex flex-col overflow-hidden group">
-                                    <div className="aspect-square bg-[#1f1f23] relative p-3 flex items-center justify-center border-b border-neutral-800/50">
-                                      {drop.image ? (
-                                        <img src={drop.image} alt={drop.name} className="max-w-full max-h-full object-contain drop-shadow-xl" />
-                                      ) : (
-                                        <Gift className="w-12 h-12 text-neutral-700" />
-                                      )}
-                                    </div>
-                                    <div className="p-3 flex flex-col flex-1 gap-1">
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-[13px] font-medium text-neutral-400">{timeStr}</p>
-                                        <div className="bg-white/10 px-2 py-0.5 rounded text-white text-[12px] font-bold leading-none flex items-center justify-center">
-                                          {drop.count || 1}
-                                        </div>
-                                      </div>
-                                      <div className="mt-0.5">
-                                        <h3 className="font-bold text-neutral-200 text-[15px] leading-snug line-clamp-2" title={drop.name}>{drop.name}</h3>
-                                      </div>
-                                      <div className="flex-1">
-                                        <p className="text-[13px] text-neutral-400 min-h-[20px]">{drop.game || ""}</p>
-                                      </div>
-                                      
-                                      <div className="mt-2 flex justify-center">
-                                        {drop.isConnected ? (
-                                          <Button variant="secondary" size="icon" disabled className="w-8 h-8 rounded-md bg-white/5 text-white disabled:opacity-100">
-                                            <Check className="w-5 h-5" />
-                                          </Button>
+                                {validDrops.map((drop, idx) => {
+                                  const end = new Date(drop.endAt);
+                                  const diffHours = Math.floor((now.getTime() - end.getTime()) / (1000 * 60 * 60));
+                                  const diffDays = Math.floor(diffHours / 24);
+                                  let timeStr = "";
+                                  if (diffHours < 0) {
+                                    timeStr = "recently";
+                                  } else if (diffHours < 24) {
+                                    timeStr = `${Math.max(1, diffHours)} hours ago`;
+                                  } else if (diffDays === 1) {
+                                    timeStr = "yesterday";
+                                  } else if (diffDays <= 30) {
+                                    timeStr = `${diffDays} days ago`;
+                                  } else if (diffDays <= 60) {
+                                    timeStr = "last month";
+                                  } else {
+                                    timeStr = `${Math.floor(diffDays / 30)} months ago`;
+                                  }
+
+                                  return (
+                                    <Card key={`${drop.id}-${idx}`} className="bg-[#18181b] border-neutral-800 flex flex-col overflow-hidden group">
+                                      <div className="aspect-square bg-[#1f1f23] relative p-3 flex items-center justify-center border-b border-neutral-800/50">
+                                        {drop.image ? (
+                                          <img src={drop.image} alt={drop.name} className="max-w-full max-h-full object-contain drop-shadow-xl" />
                                         ) : (
-                                          <Button 
-                                            className="bg-[#9146ff] hover:bg-[#772ce8] text-white h-8 text-[12px] font-semibold gap-1.5 px-3"
-                                            onClick={() => window.open(drop.accountLinkURL, "_blank")}
-                                          >
-                                            <ExternalLink className="w-4 h-4" />
-                                            Connect
-                                          </Button>
+                                          <Gift className="w-12 h-12 text-neutral-700" />
                                         )}
                                       </div>
-                                    </div>
-                                  </Card>
-                                );
-                              })}
-                            </div>
-                          </ScrollArea>
+                                      <div className="p-3 flex flex-col flex-1 gap-1">
+                                        <div className="flex items-center gap-2">
+                                          <p className="text-[13px] font-medium text-neutral-400">{timeStr}</p>
+                                          <div className="bg-white/10 px-2 py-0.5 rounded text-white text-[12px] font-bold leading-none flex items-center justify-center">
+                                            {drop.count || 1}
+                                          </div>
+                                        </div>
+                                        <div className="mt-0.5">
+                                          <h3 className="font-bold text-neutral-200 text-[15px] leading-snug line-clamp-2" title={drop.name}>{drop.name}</h3>
+                                        </div>
+                                        <div className="flex-1">
+                                          <p className="text-[13px] text-neutral-400 min-h-[20px]">{drop.game || ""}</p>
+                                        </div>
+
+                                        <div className="mt-2 flex justify-center">
+                                          {drop.isConnected ? (
+                                            <Button variant="secondary" size="icon" disabled className="w-8 h-8 rounded-md bg-white/5 text-white disabled:opacity-100">
+                                              <Check className="w-5 h-5" />
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              className="bg-[#9146ff] hover:bg-[#772ce8] text-white h-8 text-[12px] font-semibold gap-1.5 px-3"
+                                              onClick={() => window.open(drop.accountLinkURL, "_blank")}
+                                            >
+                                              <ExternalLink className="w-4 h-4" />
+                                              Connect
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </Card>
+                                  );
+                                })}
+                              </div>
+                            </ScrollArea>
                           </div>
                         );
                       })()}
